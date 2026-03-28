@@ -5063,7 +5063,7 @@ local function createMainUI()
         for _, dealer in ipairs(dealersFolder:GetDescendants()) do
             if dealer:IsA("Model") and dealer:FindFirstChildOfClass("Humanoid") then
                 foundWithHumanoid = true
-                if not knownDealers[dealer] then
+                if not knownDealers[dealer] and not dealer.Name:lower():find("conces") then
                     knownDealers[dealer] = true
                     local captured = dealer
                     local lastKnownPos = nil
@@ -5086,7 +5086,7 @@ local function createMainUI()
         -- Passe 2 (fallback) : si aucun Humanoid trouve, prendre tous les modeles
         if not foundWithHumanoid then
             for _, dealer in ipairs(dealersFolder:GetChildren()) do
-                if dealer:IsA("Model") and not knownDealers[dealer] then
+                if dealer:IsA("Model") and not knownDealers[dealer] and not dealer.Name:lower():find("conces") then
                     knownDealers[dealer] = true
                     local captured = dealer
                     local lastKnownPos = nil
