@@ -1,4 +1,4 @@
-﻿local Players = game:GetService("Players")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -10,7 +10,7 @@ local CONFIG = {
     MAX_SPEED = 200,
     STEP_MAX = 4,
     ARRIVAL_TOLERANCE = 2,
-    NEAR_TARGET_SNAP_DISTANCE = 7,
+    NEAR_TARGET_SNAP_DISTANCE = 20,
     MIN_ALLOWED_Y = -32.252,
     GROUND_RAY_HEIGHT = 80,
     GROUND_RAY_LENGTH = 220,
@@ -36,7 +36,7 @@ local CONFIG = {
     PHASE_BLOCKED_TP_STEP = 12,
     WALL_UNSTICK_MAX_ATTEMPTS = 6,
     WALL_UNSTICK_EMERGENCY_UP = 10,
-    MAX_STEP_RISE = 1.5,
+    MAX_STEP_RISE = 6,
     MAX_STEP_DROP = 8,
     MIN_GROUND_NORMAL_Y = 0.35,
     AUTO_CLIMB_STEP = 8,
@@ -100,9 +100,15 @@ local state = {
     followEnabled = false,
     orbitRotationEnabled = false,
     orbitToggleKey = Enum.KeyCode.O,
+    accelKey = Enum.KeyCode.F,
     followTarget = nil,
     followTargetPart = nil,
     followLoopRunning = false,
+    mirrorEnabled = false,
+    mirrorTargetPart = nil,
+    mirrorLastCFrame = nil,
+    mirrorStuds = 8,
+
     trollAngle = 0,
     trollTime = 0,
     trollNoClipCache = nil,
@@ -115,6 +121,21 @@ local state = {
     groundGuardRunning = false,
     vehiclePings = {},
     lang = "fr",
+    horseEnabled = false,
+    horseModel = nil,
+    horsePonies = nil,
+    poneySoundEnabled = true,
+    policeSoundEnabled = true,
+    policeNotifEnabled = true,
+    roleDisplayEnabled = true,
+    policeDetectDist = 250,
+    vehSimEnabled = false,
+    simFwdKey = Enum.KeyCode.W,
+    simRevKey = Enum.KeyCode.S,
+    simMaxFwd = 150,
+    simMaxRev = 15,
+    simAccel  = 70,
+    occPanelEnabled = true,
 }
 
 -- ===== SYSTEME DE TRADUCTION =====
@@ -124,6 +145,32 @@ local TRANSLATIONS = {
         menu_waypoints  = "HOME / WAYPOINTS",
         menu_custom     = "⚙ CUSTOM VEHICULE",
         menu_delete     = "SUPPRIMER UI",
+        menu_respawn    = "💀 RÉAPPARAÎTRE",
+        kb_accel_label  = "Boost vitesse — touche acceleration",
+        kb_accel_change = "CHANGER TOUCHE",
+        kb_accel_saved  = "Touche sauvegardee !",
+        kb_accel_listen = "Appuie sur une touche...",
+        kb_hud_section  = "Affichage HUD",
+        kb_police_notif_on  = "🚔 Notif policier : ON",
+        kb_police_notif_off = "🚔 Notif policier : OFF",
+        kb_role_badge_on    = "🏷 Badge role : ON",
+        kb_role_badge_off   = "🏷 Badge role : OFF",
+        kb_police_dist  = "Detection policier (metres)",
+        notif_police_one  = "🚔 Policier detecte",
+        notif_police_many = "🚔 %d policiers detectes",
+        notif_police_sub  = "Plus proche : %d studs",
+        menu_items      = "🎒 ITEMS",
+        items_title     = "ITEMS — ReplicatedStorage",
+        items_hint      = "Clique pour equiper un outil",
+        items_none      = "Aucun outil trouve dans ReplicatedStorage.Tools",
+        items_given     = "Equipe : %s",
+        items_back      = "← RETOUR",
+        items_remove    = "🗑 RETIRER ITEM",
+        items_removed   = "Item retire",
+        btn_instant     = "⚡ INSTANT",
+        btn_roof        = "🏠 TOIT",
+        status_instant  = "⚡ TP instant : ",
+        status_roof     = "🏠 Toit : ",
         tab_building    = "BATIMENTS",
         tab_robbery     = "DESTINATIONS",
         tab_dealer      = "DEALER",
@@ -135,6 +182,34 @@ local TRANSLATIONS = {
         btn_orbit_on    = "ORBIT: ON",
         btn_rot_off     = "ROTATION: OFF",
         btn_rot_on      = "ROTATION: ON",
+        btn_mirror_off  = "DETECTIVES: OFF",
+        btn_mirror_on   = "DETECTIVES: ON",
+        status_mirror_on   = "DETECTIVES: %s",
+        status_mirror_off  = "Detectives Bizard desactive",
+        status_mirror_stop = "Detectives Bizard: cible perdue",
+        status_mirror_noveh= "Detectives Bizard: pas dans un vehicule",
+        kb_poney_snd_on = "🐴 Son poneys : ON",
+        kb_poney_snd_off= "🐴 Son poneys : OFF",
+        kb_police_snd_on= "🚔 Sirene police : ON",
+        kb_police_snd_off="🚔 Sirene police : OFF",
+        kb_vehsim_on         = "Sim vehicule : ON",
+        kb_vehsim_off        = "Sim vehicule : OFF",
+        kb_vehsim_contact_on = "⚠ Contact ON — sim inactif",
+        kb_sim_fwd_label     = "Sim — touche avancer",
+        kb_sim_rev_label     = "Sim — touche reculer",
+        kb_sim_speed_fwd     = "Vitesse max avancer (studs/s)",
+        kb_sim_speed_rev     = "Vitesse max reculer (studs/s)",
+        kb_sim_accel_label   = "Acceleration (studs/s²)",
+        notif_airborne       = "🚗 Sim vehicule",
+        notif_airborne_sub   = "En l'air — controle coupe",
+        kb_occ_panel_on  = "👥 Panel véhicule : ON",
+        kb_occ_panel_off = "👥 Panel véhicule : OFF",
+        veh_btn_details  = "INFO",
+        veh_details_title = "👥 Occupants & Vitesse",
+        veh_driver_label  = "🚗 CONDUCTEUR",
+        veh_passenger_label = "👤 Passager",
+        veh_speed_label  = "⚡ Vitesse : %d km/h",
+        veh_no_occupants = "Aucun occupant",
         orbit_label     = "Cible orbit: aucune",
         status_ready    = "Pret",
         status_no_target= "Selectionne un joueur d'abord",
@@ -204,6 +279,15 @@ local TRANSLATIONS = {
         cv_applied_all  = "%s applique sur %d parties",
         cv_applied_one  = "%s applique sur %s",
         cv_invalid_part = "Partie invalide",
+        cv_cast_shadow_on  = "CAST SHADOW : ON",
+        cv_cast_shadow_off = "CAST SHADOW : OFF",
+        cv_speed_label  = "VITESSE VEHICULE",
+        cv_speed_reset  = "RESET",
+        btn_horse_on    = "🐴 JUMENT: ON",
+        btn_horse_off   = "🐴 JUMENT: OFF",
+        status_orbit_veh_off = "ORBIT vehicule desactive",
+        status_orbit_veh_on  = "ORBIT vehicule: %s",
+        status_no_veh_folder = "Dossier Vehicles introuvable",
         kb_title        = "⚙  ELIW LMOD — Touche raccourci orbit",
         kb_quick        = "CHOIX RAPIDE",
         kb_listen       = "Appuie sur une touche pour changer...",
@@ -226,6 +310,32 @@ local TRANSLATIONS = {
         menu_waypoints  = "HOME / WAYPOINTS",
         menu_custom     = "⚙ CUSTOM VEHICLE",
         menu_delete     = "DELETE UI",
+        menu_respawn    = "💀 RESPAWN",
+        kb_accel_label  = "Speed boost — accel key",
+        kb_accel_change = "CHANGE KEY",
+        kb_accel_saved  = "Key saved!",
+        kb_accel_listen = "Press any key...",
+        kb_hud_section  = "HUD Display",
+        kb_police_notif_on  = "🚔 Police notif : ON",
+        kb_police_notif_off = "🚔 Police notif : OFF",
+        kb_role_badge_on    = "🏷 Role badge : ON",
+        kb_role_badge_off   = "🏷 Role badge : OFF",
+        kb_police_dist  = "Police detection (metres)",
+        notif_police_one  = "🚔 Officer detected",
+        notif_police_many = "🚔 %d officers detected",
+        notif_police_sub  = "Closest: %d studs",
+        menu_items      = "🎒 ITEMS",
+        items_title     = "ITEMS — ReplicatedStorage",
+        items_hint      = "Click to equip a tool",
+        items_none      = "No tools found in ReplicatedStorage.Tools",
+        items_given     = "Equipped: %s",
+        items_back      = "← BACK",
+        items_remove    = "🗑 REMOVE ITEM",
+        items_removed   = "Item removed",
+        btn_instant     = "⚡ INSTANT",
+        btn_roof        = "🏠 ROOF",
+        status_instant  = "⚡ Instant TP: ",
+        status_roof     = "🏠 Roof: ",
         tab_building    = "BUILDINGS",
         tab_robbery     = "DESTINATIONS",
         tab_dealer      = "DEALER",
@@ -237,6 +347,34 @@ local TRANSLATIONS = {
         btn_orbit_on    = "ORBIT: ON",
         btn_rot_off     = "ROTATION: OFF",
         btn_rot_on      = "ROTATION: ON",
+        btn_mirror_off  = "DETECTIVES: OFF",
+        btn_mirror_on   = "DETECTIVES: ON",
+        status_mirror_on   = "DETECTIVES: %s",
+        status_mirror_off  = "Detectives Bizard off",
+        status_mirror_stop = "Detectives Bizard: target lost",
+        status_mirror_noveh= "Detectives Bizard: not in a vehicle",
+        kb_poney_snd_on = "🐴 Pony sound : ON",
+        kb_poney_snd_off= "🐴 Pony sound : OFF",
+        kb_police_snd_on= "🚔 Police siren : ON",
+        kb_police_snd_off="🚔 Police siren : OFF",
+        kb_vehsim_on         = "Vehicle sim : ON",
+        kb_vehsim_off        = "Vehicle sim : OFF",
+        kb_vehsim_contact_on = "⚠ Contact ON — sim inactive",
+        kb_sim_fwd_label     = "Sim — fwd key",
+        kb_sim_rev_label     = "Sim — rev key",
+        kb_sim_speed_fwd     = "Max fwd speed (studs/s)",
+        kb_sim_speed_rev     = "Max rev speed (studs/s)",
+        kb_sim_accel_label   = "Acceleration (studs/s²)",
+        notif_airborne       = "🚗 Vehicle sim",
+        notif_airborne_sub   = "Airborne — control cut",
+        kb_occ_panel_on  = "👥 Vehicle panel: ON",
+        kb_occ_panel_off = "👥 Vehicle panel: OFF",
+        veh_btn_details  = "INFO",
+        veh_details_title = "👥 Occupants & Speed",
+        veh_driver_label  = "🚗 DRIVER",
+        veh_passenger_label = "👤 Passenger",
+        veh_speed_label  = "⚡ Speed: %d km/h",
+        veh_no_occupants = "No occupants",
         orbit_label     = "Orbit target: none",
         status_ready    = "Ready",
         status_no_target= "Select a player first",
@@ -306,6 +444,15 @@ local TRANSLATIONS = {
         cv_applied_all  = "%s applied to %d parts",
         cv_applied_one  = "%s applied to %s",
         cv_invalid_part = "Invalid part",
+        cv_cast_shadow_on  = "CAST SHADOW : ON",
+        cv_cast_shadow_off = "CAST SHADOW : OFF",
+        cv_speed_label  = "VEHICLE SPEED",
+        cv_speed_reset  = "RESET",
+        btn_horse_on    = "🐴 HORSE: ON",
+        btn_horse_off   = "🐴 HORSE: OFF",
+        status_orbit_veh_off = "ORBIT vehicle disabled",
+        status_orbit_veh_on  = "ORBIT vehicle: %s",
+        status_no_veh_folder = "Vehicles folder not found",
         kb_title        = "⚙  ELIW LMOD — Orbit shortcut key",
         kb_quick        = "QUICK PICK",
         kb_listen       = "Press a key to change...",
@@ -398,11 +545,23 @@ local function isPlayerVehicleModel(vehicle)
     return false
 end
 
+local _lastDescendantScan = 0
+local _lastVehicleScan = 0
 local function findVehicle()
     if state.cachedVehicle and state.cachedVehicle.Parent and isPlayerVehicleModel(state.cachedVehicle) then
         return state.cachedVehicle
     end
     state.cachedVehicle = nil
+
+    -- Throttle: si le joueur n'est pas assis, pas besoin de scanner 20x/sec
+    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if not hum or not hum.SeatPart then
+        local now = tick()
+        if (now - _lastVehicleScan) < 1.0 then
+            return nil
+        end
+        _lastVehicleScan = now
+    end
 
     local vehiclesFolder = workspace:FindFirstChild("Vehicles")
     if vehiclesFolder then
@@ -430,13 +589,19 @@ local function findVehicle()
             end
         end
 
-        if humanoid then
-            for _, seat in ipairs(workspace:GetDescendants()) do
-                if (seat:IsA("VehicleSeat") or seat:IsA("Seat")) and seat.Occupant == humanoid then
-                    local model = seat:FindFirstAncestorOfClass("Model")
-                    if model then
-                        state.cachedVehicle = model
-                        return model
+        -- GetDescendants uniquement si le joueur EST assis quelque part
+        -- (SeatPart nil = pas de siege = scan inutile)
+        if humanoid and humanoid.SeatPart then
+            local now = tick()
+            if (now - _lastDescendantScan) >= 2 then
+                _lastDescendantScan = now
+                for _, seat in ipairs(workspace:GetDescendants()) do
+                    if (seat:IsA("VehicleSeat") or seat:IsA("Seat")) and seat.Occupant == humanoid then
+                        local model = seat:FindFirstAncestorOfClass("Model")
+                        if model then
+                            state.cachedVehicle = model
+                            return model
+                        end
                     end
                 end
             end
@@ -2124,13 +2289,36 @@ local function setWaypointMarker(waypoint)
 end
 
 
+local policeSirens = {}  -- { [player] = Sound }  (declare ici pour destroyTeleportUI)
+
 local function destroyTeleportUI()
     state.isTPing = false
     state.followEnabled = false
     state.followTarget = nil
+    state.mirrorEnabled = false
+    state.mirrorTargetPart = nil
+    state.mirrorLastCFrame = nil
     state.selectedWaypointId = nil
     stopTrollNoClipAndResolve()
     clearWaypointMarker()
+
+    -- Couper sons poneys
+    if state.horsePonies then
+        for _, entry in ipairs(state.horsePonies) do
+            if entry.sound and entry.sound.Parent then
+                entry.sound:Stop()
+            end
+        end
+    end
+
+    -- Couper sirenes police
+    if policeSirens then
+        for _, snd in pairs(policeSirens) do
+            if snd and snd.Parent then
+                snd:Stop()
+            end
+        end
+    end
 
     local playerGui = player:FindFirstChild("PlayerGui")
     if playerGui then
@@ -2396,6 +2584,397 @@ task.spawn(function()
     end
 end)
 
+-- ===== PONEYS SUR LE TOIT =====
+-- Sons : neigh bizarre (proximity) + sirene police
+local PONY_WEIRD_SOUND   = "rbxassetid://130973511966646"
+local POLICE_SIREN_SOUND = "rbxassetid://106711182836568"
+
+-- 1 poney par vehicule, 4 studs au dessus (espace local)
+local PONY_ROOF_OFFSET = CFrame.new(0, 8, 0)
+
+-- Couleurs variées pour les poneys
+local PONY_COLORS = {
+    { body = Color3.fromRGB(255, 182, 193), mane = Color3.fromRGB(255, 105, 180) }, -- rose
+    { body = Color3.fromRGB(180, 120, 220), mane = Color3.fromRGB(100, 50, 180) },  -- violet
+    { body = Color3.fromRGB(100, 200, 120), mane = Color3.fromRGB(30, 140, 60) },   -- vert
+    { body = Color3.fromRGB(255, 220, 80),  mane = Color3.fromRGB(220, 140, 0) },   -- jaune
+    { body = Color3.fromRGB(80, 180, 240),  mane = Color3.fromRGB(20, 100, 200) },  -- bleu
+}
+
+local function buildPonyModel(colorSet, withSound)
+    local horseColor = colorSet.body
+    local maneColor  = colorSet.mane
+
+    local model = Instance.new("Model")
+    model.Name = "PoneySuiveur"
+
+    local function makePart(sx, sy, sz, ox, oy, oz, col)
+        local p = Instance.new("Part")
+        p.Size = Vector3.new(sx, sy, sz)
+        p.CFrame = CFrame.new(ox, oy, oz)
+        p.Color = col or horseColor
+        p.Material = Enum.Material.SmoothPlastic
+        p.CanCollide = false
+        p.Anchored = true
+        p.CastShadow = false
+        p.Parent = model
+        return p
+    end
+
+    local body = makePart(2.4, 1.8, 5, 0, 0, 0)
+    model.PrimaryPart = body
+
+    local neck = makePart(1, 2, 1, 0, 1.4, 2.1)
+    neck.CFrame = CFrame.new(0, 1.4, 2.1) * CFrame.Angles(math.rad(-28), 0, 0)
+
+    makePart(1, 1, 2, 0, 2.5, 3.2)
+    makePart(1, 0.5, 0.7, 0, 1.9, 4.0)
+    makePart(0.25, 0.65, 0.25, -0.32, 3.1, 3.05, maneColor)
+    makePart(0.25, 0.65, 0.25,  0.32, 3.1, 3.05, maneColor)
+    makePart(0.3, 1.6, 0.3, 0, 2.4, 2.4, maneColor)
+    makePart(0.55, 2.4, 0.55, -0.85, -2.0,  1.8)
+    makePart(0.55, 2.4, 0.55,  0.85, -2.0,  1.8)
+    makePart(0.55, 2.4, 0.55, -0.85, -2.0, -1.8)
+    makePart(0.55, 2.4, 0.55,  0.85, -2.0, -1.8)
+    makePart(0.65, 0.5, 0.65, -0.85, -3.45,  1.8, maneColor)
+    makePart(0.65, 0.5, 0.65,  0.85, -3.45,  1.8, maneColor)
+    makePart(0.65, 0.5, 0.65, -0.85, -3.45, -1.8, maneColor)
+    makePart(0.65, 0.5, 0.65,  0.85, -3.45, -1.8, maneColor)
+    local tail = makePart(0.5, 2.4, 0.5, 0, -0.3, -2.9, maneColor)
+    tail.CFrame = CFrame.new(0, -0.3, -2.9) * CFrame.Angles(math.rad(38), 0, 0)
+
+    -- Son bizarre de proximite sur chaque poney
+    if withSound then
+        local snd = Instance.new("Sound")
+        snd.Name = "PoneySound"
+        snd.SoundId = PONY_WEIRD_SOUND
+        snd.Looped = false
+        snd.Volume = 2
+        snd.RollOffMode = Enum.RollOffMode.Linear
+        snd.RollOffMinDistance = 5
+        snd.RollOffMaxDistance = 45
+        snd.Parent = body
+        -- Relance automatique quand le son se termine (boucle naturelle)
+        snd.Ended:Connect(function()
+            if snd.Parent and state.poneySoundEnabled then
+                snd:Play()
+            end
+        end)
+        if state.poneySoundEnabled then
+            snd:Play()
+        end
+    end
+
+    return model
+end
+
+local horseVehicleAddedConn = nil
+
+local function spawnPoniesOnVehicle(veh)
+    if not state.horsePonies then return end
+    local root = veh:IsA("Model") and (veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart"))
+              or (veh:IsA("BasePart") and veh)
+    if not root then return end
+    -- 1 seul poney par vehicule, couleur aleatoire
+    local col = PONY_COLORS[math.random(1, #PONY_COLORS)]
+    local pony = buildPonyModel(col, true)
+    pony.Parent = workspace
+    local snd = pony.PrimaryPart and pony.PrimaryPart:FindFirstChild("PoneySound")
+    table.insert(state.horsePonies, { model = pony, root = root, sound = snd, angle = 0 })
+end
+
+local function createHorse()
+    if state.horseModel then return end
+    state.horseModel = true
+    state.horsePonies = {}
+
+    local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+    if vehiclesFolder then
+        for _, veh in ipairs(vehiclesFolder:GetChildren()) do
+            spawnPoniesOnVehicle(veh)
+        end
+        -- Nouveaux vehicules ajoutés pendant que le mode est actif
+        horseVehicleAddedConn = vehiclesFolder.ChildAdded:Connect(function(veh)
+            if state.horseEnabled and state.horsePonies then
+                spawnPoniesOnVehicle(veh)
+            end
+        end)
+    end
+end
+
+local function destroyHorse()
+    if horseVehicleAddedConn then
+        horseVehicleAddedConn:Disconnect()
+        horseVehicleAddedConn = nil
+    end
+    if state.horsePonies then
+        for _, entry in ipairs(state.horsePonies) do
+            if entry.model and entry.model.Parent then
+                entry.model:Destroy()
+            end
+        end
+        state.horsePonies = nil
+    end
+    state.horseModel = nil
+end
+
+local function updateHorse(dt)
+    if not state.horseEnabled or not state.horseModel then return end
+    if not state.horsePonies then return end
+    local spinSpeed = math.rad(120)  -- 120 deg/s
+    for i = #state.horsePonies, 1, -1 do
+        local entry = state.horsePonies[i]
+        if not entry.root or not entry.root.Parent or not entry.root:IsDescendantOf(workspace) then
+            if entry.model and entry.model.Parent then entry.model:Destroy() end
+            table.remove(state.horsePonies, i)
+        else
+            if entry.model and entry.model.Parent then
+                entry.angle = (entry.angle + spinSpeed * dt) % (math.pi * 2)
+                local cf = entry.root.CFrame * PONY_ROOF_OFFSET * CFrame.Angles(0, entry.angle, 0)
+                entry.model:PivotTo(cf)
+            end
+        end
+    end
+end
+
+local function refreshPoneySounds()
+    if not state.horsePonies then return end
+    for _, entry in ipairs(state.horsePonies) do
+        if entry.sound and entry.sound.Parent then
+            if state.poneySoundEnabled then
+                if not entry.sound.IsPlaying then entry.sound:Play() end
+            else
+                entry.sound:Stop()
+            end
+        end
+    end
+end
+
+-- ===== SIMULATION VEHICULE (IsOn = false) =====
+local vehSimData = {}   -- { [veh] = { wheelAngle = 0, baseSuspY = nil } }
+local vehAirTime = {}   -- { [veh] = secondes en l'air }
+
+local function updateVehicleSim(dt)
+    if not state.vehSimEnabled then return end
+    local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+    if not vehiclesFolder then return end
+
+    -- Nettoyer entrees de vehicules detruits
+    for veh in pairs(vehSimData) do
+        if not veh.Parent then vehSimData[veh] = nil vehAirTime[veh] = nil end
+    end
+
+    for _, veh in ipairs(vehiclesFolder:GetChildren()) do
+        if not veh:IsA("Model") then continue end
+        local isOn = veh:GetAttribute("IsOn")
+        if isOn then continue end  -- le jeu gere, on skip
+
+        local root = veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart")
+        if not root or not root:IsDescendantOf(workspace) then continue end
+
+        local vel = root.AssemblyLinearVelocity
+        local speed = vel.Magnitude
+        local forwardSpeed = root.CFrame.LookVector:Dot(vel)
+        local angVel = root.AssemblyAngularVelocity
+
+        -- Controle W/S/A/D pour le vehicule du joueur local
+        local playerInThisVeh = isLocalPlayerSeatedInVehicle(veh)
+        if playerInThisVeh then
+            local wDown = UserInputService:IsKeyDown(state.simFwdKey)
+            local sDown = UserInputService:IsKeyDown(state.simRevKey)
+            local aDown = UserInputService:IsKeyDown(Enum.KeyCode.A)
+            local dDown = UserInputService:IsKeyDown(Enum.KeyCode.D)
+            local SIM_ACCEL   = state.simAccel
+            local SIM_BRAKE   = 25
+            local SIM_MAX_FWD = state.simMaxFwd
+            local SIM_MAX_REV = state.simMaxRev
+            local SIM_TURN    = 1.4  -- vitesse rotation (rad/s)
+
+            -- Detection vol : si vel.Y depasse ce que la pente exige depuis plus de 0.3s → couper mouvement
+            local expectedSlopeY = root.CFrame.LookVector.Y * math.abs(forwardSpeed)
+            if vel.Y > expectedSlopeY + 5 then
+                vehAirTime[veh] = (vehAirTime[veh] or 0) + dt
+            else
+                vehAirTime[veh] = 0
+            end
+            local isAirborne = (vehAirTime[veh] or 0) >= 0.3
+
+            -- Vitesse avant/arriere
+            local newFwd
+            if isAirborne then
+                -- En l'air depuis 0.3s : freinage forcé, plus d'acceleration
+                newFwd = forwardSpeed * math.max(0, 1 - 8 * dt)
+                if math.abs(newFwd) < 0.3 then newFwd = 0 end
+            elseif wDown and not sDown then
+                newFwd = math.min(forwardSpeed + SIM_ACCEL * dt, SIM_MAX_FWD)
+            elseif sDown and not wDown then
+                newFwd = math.max(forwardSpeed - SIM_BRAKE * dt, -SIM_MAX_REV)
+            else
+                newFwd = forwardSpeed * math.max(0, 1 - 4 * dt)
+                if math.abs(newFwd) < 0.3 then newFwd = 0 end
+            end
+            -- Cap vel.Y
+            local safeY = math.clamp(vel.Y, -200, 1.5)
+            root.AssemblyLinearVelocity = root.CFrame.LookVector * newFwd + Vector3.new(0, safeY, 0)
+
+            -- Rotation A/D (sens inverse en marche arriere)
+            local turnInput = (dDown and 1 or 0) - (aDown and 1 or 0)
+            local speedFactor = math.clamp(math.abs(newFwd) / 10, 0, 1)
+            local reverseSign = newFwd < 0 and -1 or 1
+            local targetAngY = -turnInput * SIM_TURN * speedFactor * reverseSign
+            root.AssemblyAngularVelocity = Vector3.new(0, targetAngY, 0)
+
+            -- Attributs visuels
+            pcall(function() veh:SetAttribute("Throttle", math.clamp(newFwd / 30, -1, 1)) end)
+            pcall(function() veh:SetAttribute("Steering", turnInput) end)
+        else
+            -- Autre vehicule sans conducteur : maintenir la vitesse (contrer friction)
+            root.AssemblyLinearVelocity = vel
+            pcall(function() veh:SetAttribute("Throttle", math.clamp(forwardSpeed / 30, -1, 1)) end)
+            pcall(function() veh:SetAttribute("Steering", math.clamp(-angVel.Y / 1.5, -1, 1)) end)
+        end
+
+        -- Init data par vehicule
+        if not vehSimData[veh] then
+            local baseSusp = veh:GetAttribute("SuspensionOffset")
+            vehSimData[veh] = {
+                wheelAngle = 0,
+                baseSuspY  = baseSusp and baseSusp.Y or nil,
+            }
+        end
+        local data = vehSimData[veh]
+
+        -- Rotation des roues via Motor6D
+        local wheelsFolder = veh:FindFirstChild("Wheels", true)
+        if wheelsFolder and speed > 0.1 then
+            local radius = 1.0
+            local firstPart = wheelsFolder:FindFirstChildWhichIsA("BasePart")
+            if firstPart then
+                radius = math.clamp(math.max(firstPart.Size.Y, firstPart.Size.Z) * 0.5, 0.3, 3.0)
+            end
+            local rotDelta = (forwardSpeed / radius) * dt
+            data.wheelAngle = data.wheelAngle + rotDelta
+            for _, motor in ipairs(wheelsFolder:GetDescendants()) do
+                if motor:IsA("Motor6D") then
+                    motor.DesiredAngle = data.wheelAngle
+                    motor.CurrentAngle = data.wheelAngle
+                end
+            end
+        end
+
+        -- Rebond suspension selon vitesse
+        if data.baseSuspY and speed > 0.5 then
+            local bounce = math.sin(tick() * 10) * math.clamp(speed / 200, 0, 0.06)
+            local baseSusp = veh:GetAttribute("SuspensionOffset")
+            if baseSusp then
+                pcall(function()
+                    veh:SetAttribute("SuspensionOffset", Vector3.new(baseSusp.X, data.baseSuspY + bounce, baseSusp.Z))
+                end)
+            end
+        end
+    end
+end
+
+-- ===== SIRENE POLICE (sur le joueur avec role police) =====
+local function isPoliceRole(roleLabel)
+    return roleLabel:lower():find("police") ~= nil
+end
+
+-- policeSirens est declare plus haut, avant destroyTeleportUI
+
+local function refreshPoliceSounds()
+    for _, snd in pairs(policeSirens) do
+        if snd and snd.Parent then
+            if state.policeSoundEnabled then
+                snd.Volume = 1
+                if not snd.IsPlaying then snd:Play() end
+            else
+                snd.Volume = 0
+                snd:Stop()
+            end
+        end
+    end
+end
+
+local function attachPoliceSirenToPlayer(plr)
+    if policeSirens[plr] then return end
+    local role = getPlayerRoleLabel(plr)
+    if not isPoliceRole(role) then return end
+    local char = plr.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local snd = Instance.new("Sound")
+    snd.SoundId = POLICE_SIREN_SOUND
+    snd.Looped = true
+    snd.Volume = 1
+    snd.RollOffMode = Enum.RollOffMode.Linear
+    snd.RollOffMinDistance = 10
+    snd.RollOffMaxDistance = 120
+    snd.Parent = hrp
+    if state.policeSoundEnabled then
+        snd:Play()
+    else
+        snd.Volume = 0
+    end
+    policeSirens[plr] = snd
+    -- Nettoyage si le joueur quitte ou respawn
+    plr.AncestryChanged:Connect(function()
+        if not plr.Parent then
+            if snd and snd.Parent then snd:Destroy() end
+            policeSirens[plr] = nil
+        end
+    end)
+    plr.CharacterRemoving:Connect(function()
+        if snd and snd.Parent then snd:Destroy() end
+        policeSirens[plr] = nil
+    end)
+end
+
+-- Scan initial + surveillance
+task.spawn(function()
+    task.wait(1)
+    local Players = game:GetService("Players")
+    -- Joueurs deja connectes
+    for _, plr in ipairs(Players:GetPlayers()) do
+        attachPoliceSirenToPlayer(plr)
+    end
+    -- Nouveaux joueurs
+    Players.PlayerAdded:Connect(function(plr)
+        -- Attendre que le personnage soit charge et que le role soit attribue
+        task.wait(3)
+        attachPoliceSirenToPlayer(plr)
+    end)
+    -- Respawn : re-attacher sur le nouveau personnage
+    Players.PlayerAdded:Connect(function(plr)
+        plr.CharacterAdded:Connect(function()
+            task.wait(2)
+            policeSirens[plr] = nil  -- forcer re-attachement
+            attachPoliceSirenToPlayer(plr)
+        end)
+    end)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        plr.CharacterAdded:Connect(function()
+            task.wait(2)
+            policeSirens[plr] = nil
+            attachPoliceSirenToPlayer(plr)
+        end)
+    end
+    -- Boucle re-scan toutes les 10s (role peut changer en cours de jeu)
+    while true do
+        task.wait(10)
+        for _, plr in ipairs(Players:GetPlayers()) do
+            attachPoliceSirenToPlayer(plr)
+        end
+        -- Nettoyer joueurs deconnectes
+        for plr, snd in pairs(policeSirens) do
+            if not plr.Parent then
+                if snd and snd.Parent then snd:Destroy() end
+                policeSirens[plr] = nil
+            end
+        end
+    end
+end)
+
 local function createMainUI()
     local playerGui = player:WaitForChild("PlayerGui")
 
@@ -2406,15 +2985,6 @@ local function createMainUI()
     screenGui.Parent = playerGui
 
     -- Badge role haut-gauche
-    local roleBadge = Instance.new("Frame")
-    roleBadge.Name = "RoleBadge"
-    roleBadge.Size = UDim2.new(0, 175, 0, 36)
-    roleBadge.Position = UDim2.new(0, 10, 0, 10)
-    roleBadge.BackgroundColor3 = Color3.fromRGB(18, 22, 32)
-    roleBadge.BorderSizePixel = 0
-    roleBadge.Parent = screenGui
-    createRounded(roleBadge, 10)
-
     local badgeStroke = Instance.new("UIStroke")
     badgeStroke.Color = Color3.fromRGB(60, 70, 100)
     badgeStroke.Thickness = 1.5
@@ -2441,12 +3011,22 @@ local function createMainUI()
 
     local function getRoleColor(role)
         local r = role:lower()
-        if r:find("police") or r:find("cop") or r:find("officer") or r:find("policier") then
-            return Color3.fromRGB(50, 110, 220), "POLICIER"
-        elseif r:find("prison") or r:find("inmate") or r:find("prisonnier") then
-            return Color3.fromRGB(220, 185, 30), "PRISONNIER"
+        if r:find("police") then
+            return Color3.fromRGB(50, 110, 220), "POLICE"
+        elseif r:find("prisoner") then
+            return Color3.fromRGB(220, 160, 30), "PRISONNIER"
+        elseif r:find("firedepartment") or r:find("fire") then
+            return Color3.fromRGB(220, 60, 30), "POMPIER"
+        elseif r:find("hars") then
+            return Color3.fromRGB(30, 190, 140), "HARS"
+        elseif r:find("buscompany") or r:find("bus") then
+            return Color3.fromRGB(220, 180, 0), "BUS"
+        elseif r:find("truckcompany") or r:find("truck") then
+            return Color3.fromRGB(130, 100, 60), "TRUCK"
+        elseif r:find("citizen") then
+            return Color3.fromRGB(80, 180, 80), "CITIZEN"
         else
-            return Color3.fromRGB(210, 50, 50), "CITIZEN"
+            return Color3.fromRGB(160, 160, 160), role:upper()
         end
     end
 
@@ -2585,11 +3165,19 @@ local function createMainUI()
     customScreen.Visible = false
     customScreen.Parent = content
 
+    local itemsScreen = Instance.new("Frame")
+    itemsScreen.Name = "Items"
+    itemsScreen.Size = UDim2.new(1, 0, 1, 0)
+    itemsScreen.BackgroundTransparency = 1
+    itemsScreen.Visible = false
+    itemsScreen.Parent = content
+
     local function showScreen(screenKey)
-        menuScreen.Visible   = screenKey == "menu"
+        menuScreen.Visible     = screenKey == "menu"
         teleportScreen.Visible = screenKey == "teleport"
         waypointScreen.Visible = screenKey == "waypoints"
-        customScreen.Visible = screenKey == "custom"
+        customScreen.Visible   = screenKey == "custom"
+        itemsScreen.Visible    = screenKey == "items"
     end
 
     -- ===== CUSTOM VEHICULE UI =====
@@ -2930,7 +3518,7 @@ local function createMainUI()
         csBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         csBtn.TextSize = 12
         csBtn.Font = Enum.Font.GothamBold
-        csBtn.Text = "CAST SHADOW : ON"
+        csBtn.Text = t("cv_cast_shadow_on")
         csBtn.BorderSizePixel = 0
         csBtn.Parent = rightPanel
         createRounded(csBtn, 7)
@@ -2938,10 +3526,183 @@ local function createMainUI()
         local cvCastShadow = true
         csBtn.MouseButton1Click:Connect(function()
             cvCastShadow = not cvCastShadow
-            csBtn.Text = cvCastShadow and "CAST SHADOW : ON" or "CAST SHADOW : OFF"
+            csBtn.Text = cvCastShadow and t("cv_cast_shadow_on") or t("cv_cast_shadow_off")
             csBtn.BackgroundColor3 = cvCastShadow and Color3.fromRGB(60,165,95) or Color3.fromRGB(145,45,45)
             cvApplyProp("CastShadow", cvCastShadow)
         end)
+
+        -- ---- VITESSE VEHICULE ----
+        local speedY = csY + 36
+
+        local speedLabel = Instance.new("TextLabel")
+        speedLabel.Size = UDim2.new(0, 180, 0, 18)
+        speedLabel.Position = UDim2.new(0, 8, 0, speedY)
+        speedLabel.BackgroundTransparency = 1
+        speedLabel.TextColor3 = Color3.fromRGB(180, 210, 255)
+        speedLabel.TextSize = 12
+        speedLabel.Font = Enum.Font.GothamBold
+        speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+        speedLabel.Text = t("cv_speed_label")
+        speedLabel.Parent = rightPanel
+
+        local speedValLabel = Instance.new("TextLabel")
+        speedValLabel.Size = UDim2.new(0, 60, 0, 18)
+        speedValLabel.Position = UDim2.new(0, 150, 0, speedY)
+        speedValLabel.BackgroundTransparency = 1
+        speedValLabel.TextColor3 = Color3.fromRGB(120, 255, 190)
+        speedValLabel.TextSize = 12
+        speedValLabel.Font = Enum.Font.GothamBold
+        speedValLabel.Text = "?"
+        speedValLabel.Parent = rightPanel
+
+        local speedBtnY = speedY + 22
+
+        local speedMinusBtn = Instance.new("TextButton")
+        speedMinusBtn.Size = UDim2.new(0, 36, 0, 26)
+        speedMinusBtn.Position = UDim2.new(0, 8, 0, speedBtnY)
+        speedMinusBtn.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
+        speedMinusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        speedMinusBtn.TextSize = 14
+        speedMinusBtn.Font = Enum.Font.GothamBold
+        speedMinusBtn.Text = "-"
+        speedMinusBtn.BorderSizePixel = 0
+        speedMinusBtn.Parent = rightPanel
+        createRounded(speedMinusBtn, 6)
+
+        local speedPlusBtn = Instance.new("TextButton")
+        speedPlusBtn.Size = UDim2.new(0, 36, 0, 26)
+        speedPlusBtn.Position = UDim2.new(0, 50, 0, speedBtnY)
+        speedPlusBtn.BackgroundColor3 = Color3.fromRGB(50, 140, 80)
+        speedPlusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        speedPlusBtn.TextSize = 14
+        speedPlusBtn.Font = Enum.Font.GothamBold
+        speedPlusBtn.Text = "+"
+        speedPlusBtn.BorderSizePixel = 0
+        speedPlusBtn.Parent = rightPanel
+        createRounded(speedPlusBtn, 6)
+
+        local speedResetBtn = Instance.new("TextButton")
+        speedResetBtn.Size = UDim2.new(0, 90, 0, 26)
+        speedResetBtn.Position = UDim2.new(0, 92, 0, speedBtnY)
+        speedResetBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        speedResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        speedResetBtn.TextSize = 11
+        speedResetBtn.Font = Enum.Font.GothamBold
+        speedResetBtn.Text = t("cv_speed_reset")
+        speedResetBtn.BorderSizePixel = 0
+        speedResetBtn.Parent = rightPanel
+        createRounded(speedResetBtn, 6)
+
+        local cvSpeedStep    = 0.5  -- increment du multiplicateur par clic
+        local cvSpeedMult    = 1.5  -- multiplicateur actif (1.5 = boost par defaut)
+        local cvSpeedLoopOn  = false
+
+        local function getCylindricalConstraints(veh)
+            local constraints = {}
+            for _, d in ipairs(veh:GetDescendants()) do
+                if d:IsA("CylindricalConstraint") then
+                    table.insert(constraints, d)
+                end
+            end
+            return constraints
+        end
+
+        local function getVehicleSeats(veh)
+            local seats = {}
+            for _, d in ipairs(veh:GetDescendants()) do
+                if d:IsA("VehicleSeat") then
+                    table.insert(seats, d)
+                end
+            end
+            return seats
+        end
+
+        local function updateSpeedDisplay()
+            local pct = math.floor((cvSpeedMult - 1) * 100)
+            local sign = pct >= 0 and "+" or ""
+            speedValLabel.Text = "x" .. string.format("%.1f", cvSpeedMult)
+            if cvSpeedMult > 1 then
+                speedValLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
+            elseif cvSpeedMult < 1 then
+                speedValLabel.TextColor3 = Color3.fromRGB(255, 100, 80)
+            else
+                speedValLabel.TextColor3 = Color3.fromRGB(120, 255, 190)
+            end
+        end
+
+        -- Boucle : booste directement la velocite physique du vehicule
+        local cvSpeedConnection = nil
+        local cvBaseSpeed = nil  -- vitesse naturelle capturée une fois
+        local function startSpeedLoop()
+            if cvSpeedConnection then return end
+            cvBaseSpeed = nil
+            cvSpeedConnection = RunService.Heartbeat:Connect(function()
+                if cvSpeedMult == 1.0 then return end
+                -- Lookup rapide uniquement (pas de GetDescendants = pas de freeze)
+                local veh = state.cachedVehicle
+                if not veh or not veh.Parent then
+                    local char = player.Character
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.SeatPart then
+                        local m = hum.SeatPart:FindFirstAncestorOfClass("Model")
+                        if m then state.cachedVehicle = m veh = m end
+                    end
+                end
+                if not veh then return end
+                -- Verifier que le joueur accelere (W ou fleche haut)
+                local accelerating = UserInputService:IsKeyDown(state.accelKey)
+                if not accelerating then
+                    cvBaseSpeed = nil  -- reset pour recapturer quand il reaccélère
+                    return
+                end
+                local root = veh.PrimaryPart or getVehicleRoot(veh)
+                if not root then return end
+                local vel = root.AssemblyLinearVelocity
+                local spd = vel.Magnitude
+                if spd < 1 then return end
+                -- Capturer la vitesse naturelle la premiere fois
+                if not cvBaseSpeed then
+                    cvBaseSpeed = spd
+                end
+                -- Viser une vitesse cible fixe (pas de compoundage)
+                local target = cvBaseSpeed * cvSpeedMult
+                root.AssemblyLinearVelocity = vel.Unit * target
+            end)
+        end
+
+        local function stopSpeedLoop()
+            if cvSpeedConnection then
+                cvSpeedConnection:Disconnect()
+                cvSpeedConnection = nil
+            end
+        end
+
+        speedPlusBtn.MouseButton1Click:Connect(function()
+            cvSpeedMult = math.min(cvSpeedMult + cvSpeedStep, 3.0)
+            cvBaseSpeed = nil  -- recapturer la base au prochain tick
+            updateSpeedDisplay()
+            startSpeedLoop()
+            cvStatus.Text = state.lang == "en" and ("Speed x" .. string.format("%.1f", cvSpeedMult)) or ("Vitesse x" .. string.format("%.1f", cvSpeedMult))
+        end)
+
+        speedMinusBtn.MouseButton1Click:Connect(function()
+            cvSpeedMult = math.max(cvSpeedMult - cvSpeedStep, 1.0)
+            cvBaseSpeed = nil
+            updateSpeedDisplay()
+            startSpeedLoop()
+            cvStatus.Text = state.lang == "en" and ("Speed x" .. string.format("%.1f", cvSpeedMult)) or ("Vitesse x" .. string.format("%.1f", cvSpeedMult))
+        end)
+
+        speedResetBtn.MouseButton1Click:Connect(function()
+            cvSpeedMult = 1.5
+            cvBaseSpeed = nil
+            updateSpeedDisplay()
+            startSpeedLoop()
+            cvStatus.Text = state.lang == "en" and "Speed reset to normal" or "Vitesse remise a la normale"
+        end)
+
+        updateSpeedDisplay()
+        startSpeedLoop()  -- demarrer le boost par defaut a x1.5
 
         -- ---- LOGIQUE APPLY ----
         local cvTargetAll = true
@@ -3078,6 +3839,8 @@ local function createMainUI()
     local tabButtons = {}
     local tabContents = {}
     local currentTab = "building"
+    local knownDealers = {}
+    local dealerRefreshBtn = nil
 
     local tabsFrame = Instance.new("Frame")
     tabsFrame.Size = UDim2.new(1, -20, 0, 50)
@@ -3121,7 +3884,7 @@ local function createMainUI()
 
         local gridLayout = Instance.new("UIGridLayout")
         gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
-        gridLayout.CellSize = UDim2.new(0.5, -8, 0, 66)
+        gridLayout.CellSize = UDim2.new(0.5, -8, 0, cat.key == "dealer" and 92 or 66)
         gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
         gridLayout.VerticalAlignment = Enum.VerticalAlignment.Top
         gridLayout.Parent = scrollFrame
@@ -3145,11 +3908,37 @@ local function createMainUI()
             elseif cat.key == "players" then
                 refreshPlayersTab()
             end
+            if dealerRefreshBtn then
+                dealerRefreshBtn.Visible = (cat.key == "dealer")
+            end
         end)
     end
 
     tabButtons[currentTab].BackgroundColor3 = Color3.fromRGB(0, 150, 220)
     tabButtons[currentTab].TextColor3 = Color3.fromRGB(255, 255, 255)
+
+    -- Bouton refresh dealer (au-dessus du scrollFrame dealer)
+    do
+        local rb = Instance.new("TextButton")
+        rb.Size = UDim2.new(1, -20, 0, 26)
+        rb.Position = UDim2.new(0, 10, 0, 70)
+        rb.BackgroundColor3 = Color3.fromRGB(30, 70, 40)
+        rb.TextColor3 = Color3.fromRGB(160, 255, 190)
+        rb.TextSize = 12
+        rb.Font = Enum.Font.GothamBold
+        rb.Text = "🔄  Actualiser les dealers"
+        rb.BorderSizePixel = 0
+        rb.Visible = false
+        rb.Parent = teleportScreen
+        createRounded(rb, 5)
+        dealerRefreshBtn = rb
+
+        -- Decaler le scrollFrame dealer pour laisser la place
+        if tabContents["dealer"] then
+            tabContents["dealer"].Position = UDim2.new(0, 10, 0, 100)
+            tabContents["dealer"].Size = UDim2.new(1, -20, 1, -250)
+        end
+    end
 
     -- L'onglet vehicles utilise une liste verticale (pas de grille) pour afficher plus d'info
     if tabContents["vehicles"] then
@@ -3198,7 +3987,7 @@ local function createMainUI()
     createRounded(cancelBtn, 8)
 
     local followBtn = Instance.new("TextButton")
-    followBtn.Size = UDim2.new(0, 120, 0, 34)
+    followBtn.Size = UDim2.new(0, 100, 0, 34)
     followBtn.Position = UDim2.new(0, 270, 0, 8)
     followBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
     followBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3210,8 +3999,8 @@ local function createMainUI()
     createRounded(followBtn, 8)
 
     local rotationBtn = Instance.new("TextButton")
-    rotationBtn.Size = UDim2.new(0, 120, 0, 34)
-    rotationBtn.Position = UDim2.new(0, 400, 0, 8)
+    rotationBtn.Size = UDim2.new(0, 100, 0, 34)
+    rotationBtn.Position = UDim2.new(0, 375, 0, 8)
     rotationBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
     rotationBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     rotationBtn.TextSize = 12
@@ -3221,12 +4010,54 @@ local function createMainUI()
     rotationBtn.Parent = controlPanel
     createRounded(rotationBtn, 8)
 
+    local horseBtn = Instance.new("TextButton")
+    horseBtn.Size = UDim2.new(0, 110, 0, 34)
+    horseBtn.Position = UDim2.new(0, 480, 0, 8)
+    horseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    horseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    horseBtn.TextSize = 12
+    horseBtn.Font = Enum.Font.GothamBold
+    horseBtn.Text = t("btn_horse_off")
+    horseBtn.BorderSizePixel = 0
+    horseBtn.Parent = controlPanel
+    createRounded(horseBtn, 8)
+
+    horseBtn.MouseButton1Click:Connect(function()
+        state.horseEnabled = not state.horseEnabled
+        if state.horseEnabled then
+            createHorse()
+            horseBtn.Text = t("btn_horse_on")
+            horseBtn.BackgroundColor3 = Color3.fromRGB(110, 70, 20)
+        else
+            destroyHorse()
+            horseBtn.Text = t("btn_horse_off")
+            horseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        end
+    end)
+
+    local mirrorBtn = Instance.new("TextButton")
+    mirrorBtn.Size = UDim2.new(0, 100, 0, 34)
+    mirrorBtn.Position = UDim2.new(0, 595, 0, 8)
+    mirrorBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    mirrorBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    mirrorBtn.TextSize = 11
+    mirrorBtn.Font = Enum.Font.GothamBold
+    tReg(mirrorBtn, "btn_mirror_off")
+    mirrorBtn.BorderSizePixel = 0
+    mirrorBtn.Parent = controlPanel
+    createRounded(mirrorBtn, 8)
+
+
     local function refreshModeButtons()
         followBtn.Text = state.followEnabled and t("btn_orbit_on") or t("btn_orbit_off")
         followBtn.BackgroundColor3 = state.followEnabled and Color3.fromRGB(170, 75, 210) or Color3.fromRGB(90, 90, 90)
 
         rotationBtn.Text = state.orbitRotationEnabled and t("btn_rot_on") or t("btn_rot_off")
         rotationBtn.BackgroundColor3 = state.orbitRotationEnabled and Color3.fromRGB(60, 165, 95) or Color3.fromRGB(90, 90, 90)
+
+        mirrorBtn.Text = state.mirrorEnabled and t("btn_mirror_on") or t("btn_mirror_off")
+        mirrorBtn.BackgroundColor3 = state.mirrorEnabled and Color3.fromRGB(30, 140, 200) or Color3.fromRGB(80, 80, 80)
+
 
         local targetName = state.followTargetPart and state.followTargetPart.Parent and state.followTargetPart.Parent.Name
             or (state.followTarget and state.followTarget.Name)
@@ -3897,7 +4728,7 @@ local function createMainUI()
             -- Bouton ping
             local pingActive = state.vehiclePings[pingModel] ~= nil
             local pingBtn = Instance.new("TextButton")
-            pingBtn.Size = UDim2.new(0, 40, 1, -8)
+            pingBtn.Size = UDim2.new(0, 40, 0, 58)
             pingBtn.Position = UDim2.new(1, -46, 0, 4)
             pingBtn.BackgroundColor3 = pingActive and Color3.fromRGB(0, 160, 80) or Color3.fromRGB(38, 52, 70)
             pingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3967,6 +4798,146 @@ local function createMainUI()
                 microTeleport(targetPos, statusLabel, customTpOptions)
             end)
         end)
+
+        -- Bouton TP instant (visible seulement si <= 50 studs)
+        local instantBtn = Instance.new("TextButton")
+        instantBtn.Size = UDim2.new(1, 0, 0, 24)
+        instantBtn.Position = UDim2.new(0, 0, 0, 66)
+        instantBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 90)
+        instantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        instantBtn.TextSize = 12
+        instantBtn.Font = Enum.Font.GothamBold
+        instantBtn.Text = t("btn_instant")
+        instantBtn.BorderSizePixel = 0
+        instantBtn.ZIndex = 4
+        instantBtn.Visible = false
+        instantBtn.Parent = btn
+        createRounded(instantBtn, 5)
+        local instGrad = Instance.new("UIGradient")
+        instGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 230, 110)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 60)),
+        })
+        instGrad.Rotation = 90
+        instGrad.Parent = instantBtn
+        local instStroke = Instance.new("UIStroke")
+        instStroke.Color = Color3.fromRGB(80, 255, 150)
+        instStroke.Transparency = 0.6
+        instStroke.Thickness = 1
+        instStroke.Parent = instantBtn
+
+        instantBtn.MouseButton1Click:Connect(function()
+            local result = getTargetPosition()
+            local targetPos = typeof(result) == "table" and result.pos or result
+            if not targetPos then return end
+            local vehicle = findVehicle()
+            if vehicle then
+                local root = getVehicleRoot(vehicle)
+                if root then
+                    local halfH = getVehicleHalfHeight(vehicle)
+                    local dest = Vector3.new(targetPos.X, targetPos.Y + halfH, targetPos.Z)
+                    root.CFrame = CFrame.new(dest) * CFrame.Angles(0, root.CFrame:ToEulerAnglesYXZ())
+                    statusLabel.Text = t("status_instant") .. text
+                end
+            else
+                local char = player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.CFrame = CFrame.new(targetPos)
+                    statusLabel.Text = t("status_instant") .. text
+                end
+            end
+        end)
+
+        -- Bouton TP TOIT (visible a <= 25 studs)
+        local roofBtn = Instance.new("TextButton")
+        roofBtn.Size = UDim2.new(0.5, -1, 0, 24)
+        roofBtn.Position = UDim2.new(0.5, 1, 0, 66)
+        roofBtn.BackgroundColor3 = Color3.fromRGB(200, 110, 0)
+        roofBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        roofBtn.TextSize = 12
+        roofBtn.Font = Enum.Font.GothamBold
+        roofBtn.Text = t("btn_roof")
+        roofBtn.BorderSizePixel = 0
+        roofBtn.ZIndex = 4
+        roofBtn.Visible = false
+        roofBtn.Parent = btn
+        createRounded(roofBtn, 5)
+        local roofGrad = Instance.new("UIGradient")
+        roofGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(230, 140, 20)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 75, 0)),
+        })
+        roofGrad.Rotation = 90
+        roofGrad.Parent = roofBtn
+        local roofStroke = Instance.new("UIStroke")
+        roofStroke.Color = Color3.fromRGB(255, 190, 60)
+        roofStroke.Transparency = 0.6
+        roofStroke.Thickness = 1
+        roofStroke.Parent = roofBtn
+
+        -- Ajuster instant a moitie du bouton
+        instantBtn.Size = UDim2.new(0.5, -1, 0, 24)
+        instantBtn.Position = UDim2.new(0, 0, 0, 66)
+
+        roofBtn.MouseButton1Click:Connect(function()
+            local result = getTargetPosition()
+            local targetPos = typeof(result) == "table" and result.pos or result
+            if not targetPos then return end
+            -- Raycast depuis le haut pour trouver le toit
+            local rayOrigin = Vector3.new(targetPos.X, targetPos.Y + 300, targetPos.Z)
+            local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -350, 0))
+            local destPos = targetPos
+            if rayResult then
+                local vehicle = findVehicle()
+                local halfH = vehicle and getVehicleHalfHeight(vehicle) or 3
+                destPos = Vector3.new(targetPos.X, rayResult.Position.Y + halfH + 0.5, targetPos.Z)
+            end
+            local vehicle = findVehicle()
+            if vehicle then
+                local root = getVehicleRoot(vehicle)
+                if root then
+                    root.CFrame = CFrame.new(destPos) * CFrame.Angles(0, root.CFrame:ToEulerAnglesYXZ())
+                end
+            else
+                local char = player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame = CFrame.new(destPos) end
+            end
+            statusLabel.Text = t("status_roof") .. text
+        end)
+
+        -- Boucle de proximite pour afficher/cacher les boutons
+        task.spawn(function()
+            while btn and btn.Parent do
+                local result = getTargetPosition()
+                local targetPos = typeof(result) == "table" and result.pos or result
+                local isFallback = typeof(result) == "table" and result.isFallback
+                if targetPos then
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        if isFallback then
+                            instantBtn.Visible = false
+                            roofBtn.Visible    = false
+                            if btnDistLabel and btnDistLabel.Parent then
+                                btnDistLabel.Text = string.format("📍 hors portée  X:%.0f  Z:%.0f", targetPos.X, targetPos.Z)
+                                btnDistLabel.TextColor3 = Color3.fromRGB(220, 170, 60)
+                            end
+                        else
+                            local dist = (Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z) - hrp.Position).Magnitude
+                            instantBtn.Visible = dist <= 50
+                            roofBtn.Visible    = dist <= 25
+                        end
+                    end
+                else
+                    instantBtn.Visible = false
+                    roofBtn.Visible    = false
+                end
+                task.wait(0.5)
+            end
+        end)
+
         return btn
     end
 
@@ -4081,56 +5052,315 @@ local function createMainUI()
         if homeBtn then tReg(homeBtn, "dest_home") end
     end
 
-    local function loadDealersFolder()
-        local function processFolder(dealersFolder)
-            local added = 0
-            for _, dealer in ipairs(dealersFolder:GetDescendants()) do
-                if dealer:IsA("Model") and dealer:FindFirstChildOfClass("Humanoid") then
+    local function refreshDealers()
+        local dealersFolder = workspace:FindFirstChild("Dealers")
+        if not dealersFolder then return 0 end
+
+        local addedCount = 0
+
+        -- Passe 1 : modeles avec Humanoid
+        local foundWithHumanoid = false
+        for _, dealer in ipairs(dealersFolder:GetDescendants()) do
+            if dealer:IsA("Model") and dealer:FindFirstChildOfClass("Humanoid") then
+                foundWithHumanoid = true
+                if not knownDealers[dealer] then
+                    knownDealers[dealer] = true
                     local captured = dealer
+                    local lastKnownPos = nil
                     addDestinationButton("dealer", captured.Name, Color3.fromRGB(65, 110, 65), function()
                         local part = findBasePart(captured)
-                        if not part then
-                            return nil
+                        if part then
+                            lastKnownPos = part.Position
+                            return { pos = part.Position }
                         end
-                        return {
-                            pos = part.Position,
-                        }
+                        if lastKnownPos then
+                            return { pos = lastKnownPos, isFallback = true }
+                        end
+                        return nil
                     end, captured)
-                    added = added + 1
-                end
-            end
-            -- Fallback: inclure tous les modeles meme sans Humanoid si rien trouv‌e
-            if added == 0 then
-                for _, dealer in ipairs(dealersFolder:GetChildren()) do
-                    if dealer:IsA("Model") then
-                        local captured = dealer
-                        addDestinationButton("dealer", captured.Name, Color3.fromRGB(65, 110, 65), function()
-                            local part = findBasePart(captured)
-                            if not part then
-                                return nil
-                            end
-                            return {
-                                pos = part.Position,
-                            }
-                        end, captured)
-                    end
+                    addedCount = addedCount + 1
                 end
             end
         end
 
+        -- Passe 2 (fallback) : si aucun Humanoid trouve, prendre tous les modeles
+        if not foundWithHumanoid then
+            for _, dealer in ipairs(dealersFolder:GetChildren()) do
+                if dealer:IsA("Model") and not knownDealers[dealer] then
+                    knownDealers[dealer] = true
+                    local captured = dealer
+                    local lastKnownPos = nil
+                    addDestinationButton("dealer", captured.Name, Color3.fromRGB(65, 110, 65), function()
+                        local part = findBasePart(captured)
+                        if part then
+                            lastKnownPos = part.Position
+                            return { pos = part.Position }
+                        end
+                        if lastKnownPos then
+                            return { pos = lastKnownPos, isFallback = true }
+                        end
+                        return nil
+                    end, captured)
+                    addedCount = addedCount + 1
+                end
+            end
+        end
+
+        return addedCount
+    end
+
+    local function loadDealersFolder()
         local dealersFolder = workspace:FindFirstChild("Dealers")
         if dealersFolder then
-            processFolder(dealersFolder)
+            refreshDealers()
         else
-            -- Attendre jusqu'a 10s si le dossier n'est pas encore charge
             task.spawn(function()
                 local found = workspace:WaitForChild("Dealers", 10)
                 if found then
-                    processFolder(found)
+                    refreshDealers()
                 end
             end)
         end
+
+        -- Connecter le bouton refresh
+        if dealerRefreshBtn then
+            dealerRefreshBtn.MouseButton1Click:Connect(function()
+                dealerRefreshBtn.Text = "⏳  Scan en cours..."
+                dealerRefreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 20)
+                local n = refreshDealers()
+                task.wait(0.4)
+                if n > 0 then
+                    dealerRefreshBtn.Text = string.format("✅  +%d dealer(s) ajouté(s)", n)
+                else
+                    dealerRefreshBtn.Text = "🔄  Aucun nouveau dealer"
+                end
+                task.wait(2)
+                dealerRefreshBtn.Text = "🔄  Actualiser les dealers"
+                dealerRefreshBtn.BackgroundColor3 = Color3.fromRGB(30, 70, 40)
+            end)
+        end
     end
+
+    local VEHICLE_IMAGES = {
+        ["wolfsburg marin"]              = "rbxassetid://136954682361477",
+        ["wolfsburg discovery"]          = "rbxassetid://122748784320202",
+        ["wolfsburg classic"]            = "rbxassetid://110059610469692",
+        ["bkm 1 series cabriolet"]       = "rbxassetid://112313814318039",
+        ["bkm 1200 tourer"]              = "rbxassetid://133198444458637",
+        ["quad"]                         = "rbxassetid://71059559323691",
+        ["wolfsburg handel"]             = "rbxassetid://118821587795127",
+        ["avantismo s5"]                 = "rbxassetid://113139066871015",
+        ["wolfsburg karen"]              = "rbxassetid://86036843509559",
+        ["utv"]                          = "rbxassetid://92900661682348",
+        ["stuttgart w123"]               = "rbxassetid://71240751312893",
+        ["nordforge striker 450"]        = "rbxassetid://90183714198895",
+        ["stuttgart kasten"]             = "rbxassetid://92830230563452",
+        ["stuttgart ekasten"]            = "rbxassetid://138346512135759",
+        ["stuttgart executive"]          = "rbxassetid://83078299137593",
+        ["avantismo a3"]                 = "rbxassetid://84119312202792",
+        ["stuttgart jogger"]             = "rbxassetid://136954289219952",
+        ["wolfsburg t6"]                 = "rbxassetid://130052167450404",
+        ["bkm m3 e90"]                   = "rbxassetid://85315453493112",
+        ["stuttgart gma 63"]             = "rbxassetid://82501332308157",
+        ["vellfire xy6"]                 = "rbxassetid://86780823921686",
+        ["falcon traveller"]             = "rbxassetid://101541756629366",
+        ["wolfsburg pick-up"]            = "rbxassetid://130464748199250",
+        ["avantismo q4 electron"]        = "rbxassetid://117222789599282",
+        ["tractor"]                      = "rbxassetid://111202381452906",
+        ["cuvora atrica"]                = "rbxassetid://99792532607274",
+        ["avantismo a6"]                 = "rbxassetid://110620350619431",
+        ["celestial type s"]             = "rbxassetid://85180380274141",
+        ["avantismo q5"]                 = "rbxassetid://72786552206019",
+        ["vellfire r1"]                  = "rbxassetid://94219986437325",
+        ["stuttgart gma c63 facelift"]   = "rbxassetid://102223289380423",
+        ["bkm m2"]                       = "rbxassetid://106918702540098",
+        ["stuttgart landschaft"]         = "rbxassetid://97727653328630",
+        ["avantismo r8"]                 = "rbxassetid://73212357665071",
+        ["stuttgart gma roadster"]       = "rbxassetid://111967777105631",
+        ["bkm x3"]                       = "rbxassetid://109993024692705",
+        ["bkm m5"]                       = "rbxassetid://129744716451596",
+        ["stuttgart gma sport"]          = "rbxassetid://91554778867581",
+        ["bkm m3 g80"]                   = "rbxassetid://87539218007954",
+        ["ferdinand 911"]                = "rbxassetid://134717429142107",
+        ["ferdinand 911 cabriolet"]      = "rbxassetid://137813994499303",
+        ["stuttgart gma commute"]        = "rbxassetid://116615567513165",
+        ["bullhorn prancer sfp fury"]    = "rbxassetid://77610409837699",
+        ["avantismo rs4"]                = "rbxassetid://84621492587361",
+        ["ferdinand jalapeno"]           = "rbxassetid://82966408195579",
+        ["silhouette urano"]             = "rbxassetid://134910445352825",
+        ["maranello catania"]            = "rbxassetid://71354116425947",
+        ["chryslus champion limousine"]  = "rbxassetid://121955033294438",
+        ["ferdinand vivo"]               = "rbxassetid://112505363404417",
+        ["stuttgart royal majestic"]     = "rbxassetid://76122451173112",
+        ["silhouette carbon"]            = "rbxassetid://122241004372489",
+        ["mauntley national gt"]         = "rbxassetid://139555617429662",
+        ["strugatti ettore"]             = "rbxassetid://135449333925410",
+        ["nyberg eskon"]                 = "rbxassetid://131958370992616",
+    }
+    local function getVehicleImage(name)
+        local key = string.lower(name):gsub("_", " "):gsub("%s+", " "):match("^%s*(.-)%s*$")
+        return VEHICLE_IMAGES[key]
+    end
+
+    -- Retourne la liste des { name, seat, isDriver } pour un vehicle
+    local function getVehicleOccupants(veh)
+        local result = {}
+        for _, seat in ipairs(veh:GetDescendants()) do
+            if (seat:IsA("VehicleSeat") or seat:IsA("Seat")) and seat.Occupant then
+                local hum = seat.Occupant
+                local isDriver = seat:IsA("VehicleSeat")
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p.Character and p.Character:FindFirstChild("Humanoid") == hum then
+                        local role = getPlayerRoleLabel(p)
+                        table.insert(result, { name = p.Name, seat = seat.Name, isDriver = isDriver, role = role })
+                        break
+                    end
+                end
+            end
+        end
+        -- Conducteur en premier
+        table.sort(result, function(a, b) return (a.isDriver and 1 or 0) > (b.isDriver and 1 or 0) end)
+        return result
+    end
+
+    -- ===== POPUP DETAILS VEHICULE (persistant dans main) =====
+    local vehDetailsPopup = Instance.new("Frame")
+    vehDetailsPopup.Name = "VehicleDetailsPopup"
+    vehDetailsPopup.Size = UDim2.new(0, 290, 0, 30)
+    vehDetailsPopup.Position = UDim2.new(0, 400, 0, 60)
+    vehDetailsPopup.BackgroundColor3 = Color3.fromRGB(14, 18, 30)
+    vehDetailsPopup.BorderSizePixel = 0
+    vehDetailsPopup.Visible = false
+    vehDetailsPopup.ZIndex = 15
+    vehDetailsPopup.Parent = main
+    createRounded(vehDetailsPopup, 10)
+
+    local vdpStroke = Instance.new("UIStroke")
+    vdpStroke.Color = Color3.fromRGB(255, 200, 60)
+    vdpStroke.Thickness = 1.5
+    vdpStroke.Parent = vehDetailsPopup
+
+    local vdpTitle = Instance.new("TextLabel")
+    vdpTitle.Size = UDim2.new(1, -40, 0, 26)
+    vdpTitle.Position = UDim2.new(0, 8, 0, 4)
+    vdpTitle.BackgroundTransparency = 1
+    vdpTitle.TextColor3 = Color3.fromRGB(255, 220, 60)
+    vdpTitle.TextSize = 13
+    vdpTitle.Font = Enum.Font.GothamBold
+    vdpTitle.TextXAlignment = Enum.TextXAlignment.Left
+    vdpTitle.Text = "---"
+    vdpTitle.ZIndex = 16
+    vdpTitle.Parent = vehDetailsPopup
+
+    local vdpCloseBtn = Instance.new("TextButton")
+    vdpCloseBtn.Size = UDim2.new(0, 26, 0, 26)
+    vdpCloseBtn.Position = UDim2.new(1, -30, 0, 4)
+    vdpCloseBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+    vdpCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    vdpCloseBtn.TextSize = 14
+    vdpCloseBtn.Font = Enum.Font.GothamBold
+    vdpCloseBtn.Text = "✕"
+    vdpCloseBtn.BorderSizePixel = 0
+    vdpCloseBtn.ZIndex = 16
+    vdpCloseBtn.Parent = vehDetailsPopup
+    createRounded(vdpCloseBtn, 6)
+
+    vdpCloseBtn.MouseButton1Click:Connect(function()
+        vehDetailsPopup.Visible = false
+    end)
+
+    local vdpSpeedLine = Instance.new("TextLabel")
+    vdpSpeedLine.Size = UDim2.new(1, -16, 0, 18)
+    vdpSpeedLine.Position = UDim2.new(0, 8, 0, 34)
+    vdpSpeedLine.BackgroundTransparency = 1
+    vdpSpeedLine.TextColor3 = Color3.fromRGB(100, 220, 255)
+    vdpSpeedLine.TextSize = 12
+    vdpSpeedLine.Font = Enum.Font.GothamBold
+    vdpSpeedLine.TextXAlignment = Enum.TextXAlignment.Left
+    vdpSpeedLine.Text = ""
+    vdpSpeedLine.ZIndex = 16
+    vdpSpeedLine.Parent = vehDetailsPopup
+
+    local vdpOccLines = {}
+    for i = 1, 6 do
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -16, 0, 17)
+        lbl.Position = UDim2.new(0, 8, 0, 56 + (i - 1) * 18)
+        lbl.BackgroundTransparency = 1
+        lbl.TextSize = 12
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.Text = ""
+        lbl.Visible = false
+        lbl.ZIndex = 16
+        lbl.Parent = vehDetailsPopup
+        vdpOccLines[i] = lbl
+    end
+
+    local currentDetailsVeh = nil
+
+    local function openDetailsPopup(veh)
+        currentDetailsVeh = veh
+        local root = veh:IsA("Model") and (veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart")) or veh
+        -- Titre
+        vdpTitle.Text = t("veh_details_title") .. "  —  " .. veh.Name
+        -- Vitesse
+        local speedKmh = 0
+        if root then
+            speedKmh = math.floor(root.AssemblyLinearVelocity.Magnitude * 1.071)
+        end
+        vdpSpeedLine.Text = string.format(t("veh_speed_label"), speedKmh)
+        -- Occupants
+        local occs = getVehicleOccupants(veh)
+        local lineCount = 0
+        for i = 1, 6 do
+            local occ = occs[i]
+            if occ then
+                local roleTag = (occ.role and occ.role ~= "" and occ.role ~= "—") and (" [" .. occ.role .. "]") or ""
+                if occ.isDriver then
+                    vdpOccLines[i].Text = t("veh_driver_label") .. "  " .. occ.name .. roleTag
+                    vdpOccLines[i].TextColor3 = Color3.fromRGB(255, 220, 60)
+                else
+                    vdpOccLines[i].Text = t("veh_passenger_label") .. "  " .. occ.name .. roleTag
+                    vdpOccLines[i].TextColor3 = Color3.fromRGB(200, 200, 200)
+                end
+                vdpOccLines[i].Visible = true
+                lineCount = i
+            else
+                vdpOccLines[i].Text = ""
+                vdpOccLines[i].Visible = false
+            end
+        end
+        if lineCount == 0 then
+            vdpOccLines[1].Text = t("veh_no_occupants")
+            vdpOccLines[1].TextColor3 = Color3.fromRGB(150, 150, 150)
+            vdpOccLines[1].Visible = true
+            lineCount = 1
+        end
+        -- Resize popup
+        local totalH = 56 + lineCount * 18 + 8
+        vehDetailsPopup.Size = UDim2.new(0, 290, 0, totalH)
+        vehDetailsPopup.Visible = true
+    end
+
+    -- Boucle de rafraichissement du popup details (vitesse live)
+    task.spawn(function()
+        while main.Parent do
+            task.wait(0.3)
+            if vehDetailsPopup.Visible and currentDetailsVeh and currentDetailsVeh.Parent then
+                pcall(function()
+                    local root = currentDetailsVeh:IsA("Model") and
+                        (currentDetailsVeh.PrimaryPart or currentDetailsVeh:FindFirstChildWhichIsA("BasePart"))
+                        or currentDetailsVeh
+                    if root then
+                        local speedKmh = math.floor(root.AssemblyLinearVelocity.Magnitude * 1.071)
+                        vdpSpeedLine.Text = string.format(t("veh_speed_label"), speedKmh)
+                    end
+                end)
+            end
+        end
+    end)
 
     local function refreshVehiclesTab()
         local vehiclesFrame = tabContents.vehicles
@@ -4142,7 +5372,7 @@ local function createMainUI()
 
         local vehiclesFolder = workspace:FindFirstChild("Vehicles")
         if not vehiclesFolder then
-            statusLabel.Text = "Dossier Vehicles introuvable"
+            statusLabel.Text = t("status_no_veh_folder")
             return
         end
 
@@ -4169,19 +5399,39 @@ local function createMainUI()
                 elseif fuelNum < 50 then fuelColor = Color3.fromRGB(240, 190, 40) end
             end
 
-            local btnColor = Color3.fromRGB(30, 48, 38)
+            -- Occupants
+            local occupants = veh:IsA("Model") and getVehicleOccupants(veh) or {}
+            local isOccupied = #occupants > 0
+
+            local btnColor = isOccupied and Color3.fromRGB(48, 38, 18) or Color3.fromRGB(30, 48, 38)
+            local cardHeight = isOccupied and 96 or 76
             local vBtn = Instance.new("TextButton")
-            vBtn.Size = UDim2.new(1, 0, 0, 76)
+            vBtn.Size = UDim2.new(1, 0, 0, cardHeight)
             vBtn.BackgroundColor3 = btnColor
             vBtn.Text = ""
             vBtn.BorderSizePixel = 0
             vBtn.Parent = vehiclesFrame
             createRounded(vBtn, 8)
 
+            -- Image du vehicule (si correspondance sur nom ou rim)
+            local imgId = getVehicleImage(veh.Name) or getVehicleImage(tostring(rimVal))
+            local xOff = 0
+            if imgId then
+                xOff = 74
+                local imgLabel = Instance.new("ImageLabel")
+                imgLabel.Size = UDim2.new(0, 70, 0, 70)
+                imgLabel.Position = UDim2.new(0, 2, 0, 3)
+                imgLabel.BackgroundTransparency = 1
+                imgLabel.Image = imgId
+                imgLabel.ScaleType = Enum.ScaleType.Fit
+                imgLabel.ZIndex = 2
+                imgLabel.Parent = vBtn
+            end
+
             -- Dot etat
             local dot = Instance.new("Frame")
             dot.Size = UDim2.new(0, 12, 0, 12)
-            dot.Position = UDim2.new(0, 10, 0, 10)
+            dot.Position = UDim2.new(0, 10 + xOff, 0, 10)
             dot.BackgroundColor3 = fuelColor
             dot.BorderSizePixel = 0
             dot.ZIndex = 2
@@ -4190,8 +5440,8 @@ local function createMainUI()
 
             -- Ligne 1 : nom + position
             local lblName = Instance.new("TextLabel")
-            lblName.Size = UDim2.new(1, -30, 0, 28)
-            lblName.Position = UDim2.new(0, 26, 0, 4)
+            lblName.Size = UDim2.new(1, -30 - xOff, 0, 28)
+            lblName.Position = UDim2.new(0, 26 + xOff, 0, 4)
             lblName.BackgroundTransparency = 1
             lblName.TextColor3 = Color3.fromRGB(200, 240, 210)
             lblName.TextSize = 12
@@ -4203,8 +5453,8 @@ local function createMainUI()
 
             -- Separateur interne
             local sep = Instance.new("Frame")
-            sep.Size = UDim2.new(1, -20, 0, 1)
-            sep.Position = UDim2.new(0, 10, 0, 34)
+            sep.Size = UDim2.new(1, -20 - xOff, 0, 1)
+            sep.Position = UDim2.new(0, 10 + xOff, 0, 34)
             sep.BackgroundColor3 = Color3.fromRGB(50, 80, 60)
             sep.BorderSizePixel = 0
             sep.ZIndex = 2
@@ -4215,8 +5465,8 @@ local function createMainUI()
             local healthStr = healthNum and string.format("%.1f", healthNum) or tostring(healthVal)
 
             local lblInfo = Instance.new("TextLabel")
-            lblInfo.Size = UDim2.new(1, -16, 0, 34)
-            lblInfo.Position = UDim2.new(0, 10, 0, 38)
+            lblInfo.Size = UDim2.new(1, -16 - xOff, 0, 34)
+            lblInfo.Position = UDim2.new(0, 10 + xOff, 0, 38)
             lblInfo.BackgroundTransparency = 1
             lblInfo.TextColor3 = Color3.fromRGB(160, 210, 180)
             lblInfo.TextSize = 11
@@ -4226,11 +5476,33 @@ local function createMainUI()
             lblInfo.ZIndex = 2
             lblInfo.Parent = vBtn
 
+            -- Ligne occupants (si vehicle occupé)
+            if isOccupied then
+                local names = {}
+                for _, occ in ipairs(occupants) do
+                    local roleTag = (occ.role and occ.role ~= "" and occ.role ~= "—") and (" [" .. occ.role .. "]") or ""
+                    local label = occ.isDriver and ("🚗 " .. occ.name .. roleTag) or ("👤 " .. occ.name .. roleTag)
+                    table.insert(names, label)
+                end
+                local lblOcc = Instance.new("TextLabel")
+                lblOcc.Size = UDim2.new(1, -16 - xOff, 0, 16)
+                lblOcc.Position = UDim2.new(0, 10 + xOff, 0, 76)
+                lblOcc.BackgroundTransparency = 1
+                lblOcc.TextColor3 = Color3.fromRGB(255, 200, 80)
+                lblOcc.TextSize = 11
+                lblOcc.Font = Enum.Font.GothamBold
+                lblOcc.TextXAlignment = Enum.TextXAlignment.Left
+                lblOcc.TextTruncate = Enum.TextTruncate.AtEnd
+                lblOcc.Text = "👤 " .. table.concat(names, "  •  ")
+                lblOcc.ZIndex = 2
+                lblOcc.Parent = vBtn
+            end
+
             -- Bouton PING
             local pingActive = state.vehiclePings[veh] ~= nil
             local pingBtn = Instance.new("TextButton")
             pingBtn.Size = UDim2.new(0, 46, 1, -8)
-            pingBtn.Position = UDim2.new(1, -104, 0, 4)
+            pingBtn.Position = UDim2.new(1, -202, 0, 4)
             pingBtn.BackgroundColor3 = pingActive and Color3.fromRGB(0, 160, 80) or Color3.fromRGB(38, 52, 70)
             pingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             pingBtn.TextSize = 14
@@ -4251,12 +5523,12 @@ local function createMainUI()
                 end
             end)
 
-            -- Bouton CIBLE (suit le vehicle)
+            -- Bouton CIBLE (suit le vehicle, orbit)
             local vehRoot = veh:IsA("Model") and (veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart")) or veh
             local targetActive = state.followTargetPart == vehRoot
             local targetBtn = Instance.new("TextButton")
             targetBtn.Size = UDim2.new(0, 46, 1, -8)
-            targetBtn.Position = UDim2.new(1, -54, 0, 4)
+            targetBtn.Position = UDim2.new(1, -152, 0, 4)
             targetBtn.BackgroundColor3 = targetActive and Color3.fromRGB(200, 60, 0) or Color3.fromRGB(38, 52, 70)
             targetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             targetBtn.TextSize = 14
@@ -4277,12 +5549,18 @@ local function createMainUI()
                     stopTrollNoClipAndResolve()
                     refreshModeButtons()
                     targetBtn.BackgroundColor3 = Color3.fromRGB(38, 52, 70)
-                    statusLabel.Text = "ORBIT vehicle desactive"
+                    statusLabel.Text = t("status_orbit_veh_off")
                 else
                     local localVehicle = findVehicle()
                     if not localVehicle or not isLocalPlayerSeatedInVehicle(localVehicle) then
                         statusLabel.Text = t("status_no_veh")
                         return
+                    end
+                    -- Stop mirror si actif
+                    if state.mirrorEnabled then
+                        state.mirrorEnabled = false
+                        state.mirrorTargetPart = nil
+                        state.mirrorLastCFrame = nil
                     end
                     state.followTargetPart = root
                     state.followTarget = nil
@@ -4291,7 +5569,77 @@ local function createMainUI()
                     state.trollTime = 0
                     refreshModeButtons()
                     targetBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 0)
-                    statusLabel.Text = "ORBIT vehicle: " .. veh.Name
+                    statusLabel.Text = string.format(t("status_orbit_veh_on"), veh.Name)
+                end
+            end)
+
+            -- Bouton DETECTIVES BIZARD
+            local mirrorActive = state.mirrorTargetPart == vehRoot
+            local vMirrorBtn = Instance.new("TextButton")
+            vMirrorBtn.Size = UDim2.new(0, 46, 1, -8)
+            vMirrorBtn.Position = UDim2.new(1, -102, 0, 4)
+            vMirrorBtn.BackgroundColor3 = mirrorActive and Color3.fromRGB(30, 140, 200) or Color3.fromRGB(38, 52, 70)
+            vMirrorBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            vMirrorBtn.TextSize = 14
+            vMirrorBtn.Font = Enum.Font.GothamBold
+            vMirrorBtn.Text = "DET"
+            vMirrorBtn.BorderSizePixel = 0
+            vMirrorBtn.ZIndex = 3
+            vMirrorBtn.Parent = vBtn
+            createRounded(vMirrorBtn, 6)
+
+            vMirrorBtn.MouseButton1Click:Connect(function()
+                local root = veh:IsA("Model") and (veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart")) or veh
+                if not root then return end
+
+                if state.mirrorTargetPart == root then
+                    -- Desactiver miroir
+                    state.mirrorEnabled = false
+                    state.mirrorTargetPart = nil
+                    state.mirrorLastCFrame = nil
+                    vMirrorBtn.BackgroundColor3 = Color3.fromRGB(38, 52, 70)
+                    statusLabel.Text = t("status_mirror_off")
+                    refreshModeButtons()
+                else
+                    -- Selectionner cette cible pour le miroir
+                    local localVehicle = findVehicle()
+                    if not localVehicle or not isLocalPlayerSeatedInVehicle(localVehicle) then
+                        statusLabel.Text = t("status_no_veh")
+                        return
+                    end
+                    -- Stop orbit si actif
+                    if state.followEnabled then
+                        state.followEnabled = false
+                        state.followTargetPart = nil
+                        stopTrollNoClipAndResolve()
+                    end
+                    state.mirrorTargetPart = root
+                    state.mirrorEnabled = true
+                    vMirrorBtn.BackgroundColor3 = Color3.fromRGB(30, 140, 200)
+                    statusLabel.Text = string.format(t("status_mirror_on"), veh.Name)
+                    refreshModeButtons()
+                end
+            end)
+
+            -- Bouton INFO (details occupants + vitesse)
+            local infoBtn = Instance.new("TextButton")
+            infoBtn.Size = UDim2.new(0, 46, 1, -8)
+            infoBtn.Position = UDim2.new(1, -52, 0, 4)
+            infoBtn.BackgroundColor3 = Color3.fromRGB(50, 80, 130)
+            infoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            infoBtn.TextSize = 11
+            infoBtn.Font = Enum.Font.GothamBold
+            infoBtn.Text = t("veh_btn_details")
+            infoBtn.BorderSizePixel = 0
+            infoBtn.ZIndex = 3
+            infoBtn.Parent = vBtn
+            createRounded(infoBtn, 6)
+
+            infoBtn.MouseButton1Click:Connect(function()
+                if vehDetailsPopup.Visible and currentDetailsVeh == veh then
+                    vehDetailsPopup.Visible = false
+                else
+                    openDetailsPopup(veh)
                 end
             end)
 
@@ -4449,6 +5797,450 @@ local function createMainUI()
         end
     end
 
+    do if false then -- OBJETS SUPPRIME
+        local objBack = Instance.new("TextButton")
+        objBack.Size = UDim2.new(0, 110, 0, 34)
+        objBack.Position = UDim2.new(0, 10, 0, 8)
+        objBack.BackgroundColor3 = Color3.fromRGB(38, 52, 82)
+        objBack.TextColor3 = Color3.fromRGB(200, 220, 255)
+        objBack.TextSize = 12
+        objBack.Font = Enum.Font.GothamBold
+        tReg(objBack, "obj_back")
+        objBack.BorderSizePixel = 0
+        objBack.Parent = objectScreen
+        createRounded(objBack, 8)
+        objBack.MouseButton1Click:Connect(function() showScreen("menu") end)
+
+        local objTitle = Instance.new("TextLabel")
+        objTitle.Size = UDim2.new(1, -130, 0, 34)
+        objTitle.Position = UDim2.new(0, 130, 0, 8)
+        objTitle.BackgroundTransparency = 1
+        objTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+        objTitle.TextSize = 14
+        objTitle.Font = Enum.Font.GothamBold
+        tReg(objTitle, "obj_title")
+        objTitle.TextXAlignment = Enum.TextXAlignment.Left
+        objTitle.Parent = objectScreen
+
+        local objScanBtn = Instance.new("TextButton")
+        objScanBtn.Size = UDim2.new(1, -20, 0, 34)
+        objScanBtn.Position = UDim2.new(0, 10, 0, 50)
+        objScanBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 140)
+        objScanBtn.TextColor3 = Color3.fromRGB(220, 240, 255)
+        objScanBtn.TextSize = 13
+        objScanBtn.Font = Enum.Font.GothamBold
+        tReg(objScanBtn, "obj_scan")
+        objScanBtn.BorderSizePixel = 0
+        objScanBtn.Parent = objectScreen
+        createRounded(objScanBtn, 8)
+
+        local objStatusLabel = Instance.new("TextLabel")
+        objStatusLabel.Size = UDim2.new(1, -20, 0, 18)
+        objStatusLabel.Position = UDim2.new(0, 10, 0, 90)
+        objStatusLabel.BackgroundTransparency = 1
+        objStatusLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        objStatusLabel.TextSize = 11
+        objStatusLabel.Font = Enum.Font.Gotham
+        objStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        objStatusLabel.Text = ""
+        objStatusLabel.Parent = objectScreen
+
+        local objScroll = Instance.new("ScrollingFrame")
+        objScroll.Size = UDim2.new(1, -20, 1, -116)
+        objScroll.Position = UDim2.new(0, 10, 0, 112)
+        objScroll.BackgroundColor3 = Color3.fromRGB(14, 17, 28)
+        objScroll.BorderSizePixel = 0
+        objScroll.ScrollBarThickness = 5
+        objScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 220)
+        objScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        objScroll.Parent = objectScreen
+        createRounded(objScroll, 8)
+
+        local objLayout = Instance.new("UIListLayout")
+        objLayout.FillDirection = Enum.FillDirection.Vertical
+        objLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        objLayout.Padding = UDim.new(0, 6)
+        objLayout.Parent = objScroll
+
+        local objPadding = Instance.new("UIPadding")
+        objPadding.PaddingTop = UDim.new(0, 6)
+        objPadding.PaddingLeft = UDim.new(0, 6)
+        objPadding.PaddingRight = UDim.new(0, 6)
+        objPadding.Parent = objScroll
+
+        local function clearObjList()
+            for _, c in ipairs(objScroll:GetChildren()) do
+                if c:IsA("Frame") then c:Destroy() end
+            end
+        end
+
+        local function addObjEntry(toolObj, dist)
+            local handle = toolObj:FindFirstChild("Handle")
+            local meshId = ""
+            local texId = ""
+            if handle and handle:IsA("MeshPart") then
+                meshId = handle.MeshId or ""
+                texId = handle.TextureID or ""
+            elseif handle and handle:IsA("SpecialMesh") then
+                meshId = handle.MeshId or ""
+                texId = handle.TextureId or ""
+            end
+
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -12, 0, 74)
+            row.BackgroundColor3 = Color3.fromRGB(22, 27, 45)
+            row.BorderSizePixel = 0
+            row.Parent = objScroll
+            createRounded(row, 8)
+
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, -160, 0, 22)
+            nameLabel.Position = UDim2.new(0, 10, 0, 4)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+            nameLabel.TextSize = 13
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Text = toolObj.Name
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLabel.Parent = row
+
+            local distLabel = Instance.new("TextLabel")
+            distLabel.Size = UDim2.new(0, 70, 0, 22)
+            distLabel.Position = UDim2.new(1, -80, 0, 4)
+            distLabel.BackgroundTransparency = 1
+            distLabel.TextColor3 = Color3.fromRGB(160, 160, 200)
+            distLabel.TextSize = 11
+            distLabel.Font = Enum.Font.Gotham
+            distLabel.TextXAlignment = Enum.TextXAlignment.Right
+            distLabel.Text = math.floor(dist) .. t("obj_dist")
+            distLabel.Parent = row
+
+            local meshLabel = Instance.new("TextLabel")
+            meshLabel.Size = UDim2.new(1, -20, 0, 16)
+            meshLabel.Position = UDim2.new(0, 10, 0, 26)
+            meshLabel.BackgroundTransparency = 1
+            meshLabel.TextColor3 = Color3.fromRGB(100, 140, 200)
+            meshLabel.TextSize = 10
+            meshLabel.Font = Enum.Font.Gotham
+            meshLabel.TextXAlignment = Enum.TextXAlignment.Left
+            meshLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            meshLabel.Text = meshId ~= "" and (t("obj_mesh") .. meshId) or ""
+            meshLabel.Parent = row
+
+            local texLabel = Instance.new("TextLabel")
+            texLabel.Size = UDim2.new(1, -20, 0, 16)
+            texLabel.Position = UDim2.new(0, 10, 0, 42)
+            texLabel.BackgroundTransparency = 1
+            texLabel.TextColor3 = Color3.fromRGB(100, 140, 200)
+            texLabel.TextSize = 10
+            texLabel.Font = Enum.Font.Gotham
+            texLabel.TextXAlignment = Enum.TextXAlignment.Left
+            texLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            texLabel.Text = texId ~= "" and (t("obj_tex") .. texId) or ""
+            texLabel.Parent = row
+
+            local equipBtn = Instance.new("TextButton")
+            equipBtn.Size = UDim2.new(0, 70, 0, 22)
+            equipBtn.Position = UDim2.new(1, -160, 1, -28)
+            equipBtn.BackgroundColor3 = Color3.fromRGB(30, 120, 60)
+            equipBtn.TextColor3 = Color3.fromRGB(200, 255, 210)
+            equipBtn.TextSize = 11
+            equipBtn.Font = Enum.Font.GothamBold
+            tReg(equipBtn, "obj_equip")
+            equipBtn.BorderSizePixel = 0
+            equipBtn.Parent = row
+            createRounded(equipBtn, 6)
+
+            local takeBtn = Instance.new("TextButton")
+            takeBtn.Size = UDim2.new(0, 70, 0, 22)
+            takeBtn.Position = UDim2.new(1, -82, 1, -28)
+            takeBtn.BackgroundColor3 = Color3.fromRGB(100, 70, 20)
+            takeBtn.TextColor3 = Color3.fromRGB(255, 230, 180)
+            takeBtn.TextSize = 11
+            takeBtn.Font = Enum.Font.GothamBold
+            tReg(takeBtn, "obj_take")
+            takeBtn.BorderSizePixel = 0
+            takeBtn.Parent = row
+            createRounded(takeBtn, 6)
+
+            -- EQUIPER : parent Tool -> Backpack (le jeu l'equipe automatiquement)
+            equipBtn.MouseButton1Click:Connect(function()
+                local ok, err = pcall(function()
+                    toolObj.Parent = player.Backpack
+                end)
+                if ok then
+                    objStatusLabel.Text = "✓ " .. toolObj.Name .. " envoye au backpack"
+                    objStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+                    row:Destroy()
+                else
+                    objStatusLabel.Text = "✗ " .. tostring(err)
+                    objStatusLabel.TextColor3 = Color3.fromRGB(220, 80, 80)
+                end
+            end)
+
+            -- PRENDRE : parent Tool -> Character (equipe immediatement en main)
+            takeBtn.MouseButton1Click:Connect(function()
+                local char = player.Character
+                local ok, err = pcall(function()
+                    toolObj.Parent = char
+                end)
+                if ok then
+                    objStatusLabel.Text = "✓ " .. toolObj.Name .. " equipe sur le perso"
+                    objStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+                    row:Destroy()
+                else
+                    objStatusLabel.Text = "✗ " .. tostring(err)
+                    objStatusLabel.TextColor3 = Color3.fromRGB(220, 80, 80)
+                end
+            end)
+        end
+
+        objScanBtn.MouseButton1Click:Connect(function()
+            clearObjList()
+            objStatusLabel.Text = "Scan en cours..."
+            objStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local myPos = root and root.Position
+
+            local found = {}
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Tool") and obj.Parent ~= player.Backpack and obj.Parent ~= player.Character then
+                    local handle = obj:FindFirstChild("Handle")
+                    if handle then
+                        local dist = myPos and (myPos - handle.Position).Magnitude or 0
+                        table.insert(found, { tool = obj, dist = dist })
+                    end
+                end
+            end
+
+            table.sort(found, function(a, b) return a.dist < b.dist end)
+
+            if #found == 0 then
+                objStatusLabel.Text = t("obj_none")
+                objStatusLabel.TextColor3 = Color3.fromRGB(160, 100, 100)
+            else
+                objStatusLabel.Text = #found .. " objet(s) trouve(s)"
+                objStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+                for _, entry in ipairs(found) do
+                    addObjEntry(entry.tool, entry.dist)
+                end
+            end
+
+            objScroll.CanvasSize = UDim2.new(0, 0, 0, objLayout.AbsoluteContentSize.Y + 16)
+        end)
+    end end -- fin OBJETS SUPPRIME
+
+    -- ===== ECRAN ITEMS =====
+    do
+        local itemsBack = Instance.new("TextButton")
+        itemsBack.Size = UDim2.new(0, 120, 0, 34)
+        itemsBack.Position = UDim2.new(0, 10, 0, 8)
+        itemsBack.BackgroundColor3 = Color3.fromRGB(50, 60, 80)
+        itemsBack.TextColor3 = Color3.fromRGB(200, 210, 255)
+        itemsBack.TextSize = 13
+        itemsBack.Font = Enum.Font.GothamBold
+        itemsBack.BorderSizePixel = 0
+        itemsBack.Parent = itemsScreen
+        tReg(itemsBack, "items_back")
+        createRounded(itemsBack, 8)
+        itemsBack.MouseButton1Click:Connect(function() showScreen("menu") end)
+
+        local itemsRemoveBtn = Instance.new("TextButton")
+        itemsRemoveBtn.Size = UDim2.new(0, 160, 0, 34)
+        itemsRemoveBtn.Position = UDim2.new(1, -170, 0, 8)
+        itemsRemoveBtn.BackgroundColor3 = Color3.fromRGB(140, 40, 40)
+        itemsRemoveBtn.TextColor3 = Color3.fromRGB(255, 220, 220)
+        itemsRemoveBtn.TextSize = 13
+        itemsRemoveBtn.Font = Enum.Font.GothamBold
+        itemsRemoveBtn.BorderSizePixel = 0
+        itemsRemoveBtn.Parent = itemsScreen
+        tReg(itemsRemoveBtn, "items_remove")
+        createRounded(itemsRemoveBtn, 8)
+        itemsRemoveBtn.MouseButton1Click:Connect(function()
+            local char = player.Character
+            if char then
+                for _, obj in ipairs(char:GetChildren()) do
+                    if obj:IsA("Tool") then obj:Destroy() end
+                end
+            end
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            if backpack then
+                for _, obj in ipairs(backpack:GetChildren()) do
+                    if obj:IsA("Tool") then obj:Destroy() end
+                end
+            end
+            itemsStatus.Text = t("items_removed")
+            itemsStatus.TextColor3 = Color3.fromRGB(220, 100, 80)
+        end)
+
+        local itemsTitle = Instance.new("TextLabel")
+        itemsTitle.Size = UDim2.new(1, -20, 0, 24)
+        itemsTitle.Position = UDim2.new(0, 10, 0, 48)
+        itemsTitle.BackgroundTransparency = 1
+        itemsTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+        itemsTitle.TextSize = 15
+        itemsTitle.Font = Enum.Font.GothamBold
+        itemsTitle.TextXAlignment = Enum.TextXAlignment.Left
+        itemsTitle.Parent = itemsScreen
+        tReg(itemsTitle, "items_title")
+
+        local itemsHint = Instance.new("TextLabel")
+        itemsHint.Size = UDim2.new(1, -20, 0, 18)
+        itemsHint.Position = UDim2.new(0, 10, 0, 74)
+        itemsHint.BackgroundTransparency = 1
+        itemsHint.TextColor3 = Color3.fromRGB(140, 150, 170)
+        itemsHint.TextSize = 12
+        itemsHint.Font = Enum.Font.Gotham
+        itemsHint.TextXAlignment = Enum.TextXAlignment.Left
+        itemsHint.Parent = itemsScreen
+        tReg(itemsHint, "items_hint")
+
+        local itemsStatus = Instance.new("TextLabel")
+        itemsStatus.Size = UDim2.new(1, -20, 0, 20)
+        itemsStatus.Position = UDim2.new(0, 10, 0, 96)
+        itemsStatus.BackgroundTransparency = 1
+        itemsStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+        itemsStatus.TextSize = 12
+        itemsStatus.Font = Enum.Font.Gotham
+        itemsStatus.TextXAlignment = Enum.TextXAlignment.Left
+        itemsStatus.Text = ""
+        itemsStatus.Parent = itemsScreen
+
+        local itemsScroll = Instance.new("ScrollingFrame")
+        itemsScroll.Size = UDim2.new(1, -20, 1, -130)
+        itemsScroll.Position = UDim2.new(0, 10, 0, 124)
+        itemsScroll.BackgroundColor3 = Color3.fromRGB(20, 25, 38)
+        itemsScroll.BorderSizePixel = 0
+        itemsScroll.ScrollBarThickness = 5
+        itemsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        itemsScroll.Parent = itemsScreen
+        createRounded(itemsScroll, 8)
+
+        local itemsLayout = Instance.new("UIListLayout")
+        itemsLayout.SortOrder = Enum.SortOrder.Name
+        itemsLayout.Padding = UDim.new(0, 4)
+        itemsLayout.Parent = itemsScroll
+
+        local itemsPad = Instance.new("UIPadding")
+        itemsPad.PaddingTop = UDim.new(0, 6)
+        itemsPad.PaddingLeft = UDim.new(0, 6)
+        itemsPad.PaddingRight = UDim.new(0, 6)
+        itemsPad.Parent = itemsScroll
+
+        local function giveToolToCharacter(tool)
+            local char = player.Character
+            if not char then return end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            -- Supprimer tous les tools deja dans le character (equipes)
+            for _, obj in ipairs(char:GetChildren()) do
+                if obj:IsA("Tool") then obj:Destroy() end
+            end
+            -- Supprimer tous les tools dans le backpack
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            if backpack then
+                for _, obj in ipairs(backpack:GetChildren()) do
+                    if obj:IsA("Tool") then obj:Destroy() end
+                end
+            end
+            local clone = tool:Clone()
+            local handle = clone:FindFirstChild("Handle")
+            local rightHand = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
+            -- Positionner le handle directement a la main avant de parenter
+            if handle and rightHand then
+                handle.CFrame = rightHand.CFrame
+            end
+            clone.Parent = char
+            -- Creer le weld immediatement (synchrone, pas de wait)
+            if handle and rightHand then
+                local existing = rightHand:FindFirstChild("RightGrip")
+                if existing then existing:Destroy() end
+                local weld = Instance.new("Weld")
+                weld.Name = "RightGrip"
+                weld.Part0 = rightHand
+                weld.Part1 = handle
+                weld.C0 = clone.Grip
+                weld.Parent = rightHand
+            end
+            itemsStatus.Text = string.format(t("items_given"), tool.Name)
+            itemsStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+        end
+
+        local function refreshItemsList()
+            -- Vider la liste
+            for _, c in ipairs(itemsScroll:GetChildren()) do
+                if c:IsA("TextButton") then c:Destroy() end
+            end
+
+            local toolsFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Tools")
+            if not toolsFolder then
+                itemsStatus.Text = t("items_none")
+                itemsStatus.TextColor3 = Color3.fromRGB(220, 100, 80)
+                itemsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+                return
+            end
+
+            local tools = {}
+            for _, obj in ipairs(toolsFolder:GetChildren()) do
+                if obj:IsA("Tool") then
+                    table.insert(tools, obj)
+                end
+            end
+
+            if #tools == 0 then
+                itemsStatus.Text = t("items_none")
+                itemsStatus.TextColor3 = Color3.fromRGB(220, 100, 80)
+                itemsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+                return
+            end
+
+            itemsStatus.Text = #tools .. " outil(s)"
+            itemsStatus.TextColor3 = Color3.fromRGB(140, 150, 170)
+
+            for _, tool in ipairs(tools) do
+                local btn = Instance.new("TextButton")
+                btn.Size = UDim2.new(1, -12, 0, 40)
+                btn.BackgroundColor3 = Color3.fromRGB(30, 40, 62)
+                btn.TextColor3 = Color3.fromRGB(220, 230, 255)
+                btn.TextSize = 13
+                btn.Font = Enum.Font.Gotham
+                btn.Text = "🔧 " .. tool.Name
+                btn.TextXAlignment = Enum.TextXAlignment.Left
+                btn.BorderSizePixel = 0
+                btn.Parent = itemsScroll
+                createRounded(btn, 7)
+
+                local pad = Instance.new("UIPadding")
+                pad.PaddingLeft = UDim.new(0, 10)
+                pad.Parent = btn
+
+                local toolRef = tool
+                btn.MouseButton1Click:Connect(function()
+                    giveToolToCharacter(toolRef)
+                end)
+
+                btn.MouseEnter:Connect(function()
+                    btn.BackgroundColor3 = Color3.fromRGB(0, 130, 200)
+                end)
+                btn.MouseLeave:Connect(function()
+                    btn.BackgroundColor3 = Color3.fromRGB(30, 40, 62)
+                end)
+            end
+
+            itemsScroll.CanvasSize = UDim2.new(0, 0, 0, itemsLayout.AbsoluteContentSize.Y + 16)
+        end
+
+        -- Rafraichir quand l'ecran devient visible
+        itemsScreen:GetPropertyChangedSignal("Visible"):Connect(function()
+            if itemsScreen.Visible then
+                refreshItemsList()
+            end
+        end)
+    end
+
     local mbTeleport = makeMenuButton(t("menu_teleport"), Color3.fromRGB(0, 150, 220), function()
         showScreen("teleport")
     end)
@@ -4482,6 +6274,21 @@ local function createMainUI()
         end
         refreshModeButtons()
     end)
+
+    local mbItems = makeMenuButton(t("menu_items"), Color3.fromRGB(80, 50, 130), function()
+        showScreen("items")
+    end)
+    tReg(mbItems, "menu_items")
+
+    local mbRespawn = makeMenuButton(t("menu_respawn"), Color3.fromRGB(120, 40, 40), function()
+        local char = player.Character
+        if not char then return end
+        local upperTorso = char:FindFirstChild("UpperTorso")
+        if upperTorso then upperTorso:Destroy() end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.Health = 0 end
+    end)
+    tReg(mbRespawn, "menu_respawn")
 
     local mbDel = makeMenuButton(t("menu_delete"), Color3.fromRGB(145, 45, 45), function()
         destroyTeleportUI()
@@ -4518,6 +6325,12 @@ local function createMainUI()
             statusLabel.Text = t("status_orbit_off")
             stopTrollNoClipAndResolve()
         else
+            -- Stop mirror si actif
+            if state.mirrorEnabled then
+                state.mirrorEnabled = false
+                state.mirrorTargetPart = nil
+                state.mirrorLastCFrame = nil
+            end
             local mode = state.orbitRotationEnabled and "rotation" or "suivi"
             statusLabel.Text = "ORBIT active (" .. mode .. "): " .. state.followTarget.Name
             state.trollAngle = 0
@@ -4537,6 +6350,39 @@ local function createMainUI()
         end
         refreshModeButtons()
     end)
+
+    mirrorBtn.MouseButton1Click:Connect(function()
+        if state.mirrorEnabled then
+            -- Desactiver
+            state.mirrorEnabled = false
+            state.mirrorTargetPart = nil
+            state.mirrorLastCFrame = nil
+
+            statusLabel.Text = t("status_mirror_off")
+            refreshModeButtons()
+        else
+            -- Activer : il faut une cible mirror selectionnee
+            if not state.mirrorTargetPart then
+                statusLabel.Text = state.lang == "en" and "Select a vehicle target (DET) first" or "Selectionne une cible vehicule (DET) d'abord"
+                return
+            end
+            local localVehicle = findVehicle()
+            if not localVehicle or not isLocalPlayerSeatedInVehicle(localVehicle) then
+                statusLabel.Text = t("status_no_veh")
+                return
+            end
+            -- Stop orbit si actif
+            if state.followEnabled then
+                state.followEnabled = false
+                stopTrollNoClipAndResolve()
+            end
+            state.mirrorEnabled = true
+            local vehName = state.mirrorTargetPart.Parent and state.mirrorTargetPart.Parent.Name or state.mirrorTargetPart.Name
+            statusLabel.Text = string.format(t("status_mirror_on"), vehName)
+            refreshModeButtons()
+        end
+    end)
+
 
     closeBtn.MouseButton1Click:Connect(function()
         state.isTPing = false
@@ -4648,6 +6494,85 @@ local function createMainUI()
         end
     end)
 
+    -- Boucle suivi jument
+    task.spawn(function()
+        while screenGui.Parent do
+            local dt = RunService.Heartbeat:Wait()
+            updateHorse(dt)
+        end
+    end)
+
+    -- Boucle simulation vehicule (IsOn = false)
+    task.spawn(function()
+        while screenGui.Parent do
+            local dt = RunService.Heartbeat:Wait()
+            updateVehicleSim(dt)
+        end
+    end)
+
+    -- Boucle mode DETECTIVES BIZARD
+    task.spawn(function()
+        while screenGui.Parent do
+            RunService.Heartbeat:Wait()
+
+            if not state.mirrorEnabled then continue end
+
+            -- Verif cible (avant isTPing pour pouvoir annuler un microTeleport en cours)
+            local targetPart = state.mirrorTargetPart
+            if not targetPart or not targetPart.Parent then
+                state.isTPing = false  -- annule microTeleport en cours si besoin
+                state.mirrorEnabled = false
+                state.mirrorTargetPart = nil
+                refreshModeButtons()
+                statusLabel.Text = t("status_mirror_stop")
+                continue
+            end
+
+            -- Verif conduite manuelle (annule aussi le microTeleport)
+            local localVehicle = findVehicle()
+            if localVehicle and isLocalPlayerDrivingInputActive(localVehicle) then
+                state.isTPing = false
+                state.mirrorEnabled = false
+                state.mirrorTargetPart = nil
+                refreshModeButtons()
+                statusLabel.Text = t("status_orbit_stop_drive")
+                continue
+            end
+
+            -- Pendant un microTeleport (phase approche) : laisser tourner
+            if state.isTPing then continue end
+
+            -- Verif assis dans vehicule
+            if not localVehicle or not isLocalPlayerSeatedInVehicle(localVehicle) then
+                state.mirrorEnabled = false
+                state.mirrorTargetPart = nil
+                refreshModeButtons()
+                statusLabel.Text = t("status_mirror_noveh")
+                continue
+            end
+
+            local root = getVehicleRoot(localVehicle)
+            if not root then continue end
+
+            -- Position cible : 8 studs derriere dans l'espace local du vehicule cible
+            local desiredCF  = targetPart.CFrame * CFrame.new(0, 0, state.mirrorStuds)
+            local dist = (desiredCF.Position - root.Position).Magnitude
+
+
+            if dist <= state.mirrorStuds + 2 then
+                -- Phase verrouillage : meme rotation, meme hauteur, position exacte
+                localVehicle:PivotTo(clampPivotMinY(desiredCF))
+            else
+                -- Phase approche : microTeleport (meme systeme que destination/joueur)
+                local targetPos = desiredCF.Position
+                task.spawn(function()
+                    microTeleport(targetPos, statusLabel, { wallPass = true })
+                end)
+            end
+        end
+    end)
+
+
     return screenGui
 end
 
@@ -4689,9 +6614,13 @@ local function createOpenButton(mainGui)
 
     -- Panel keybind orbit (dans openGui = toujours visible)
     local KB_Z = 5
-    local keybindPanel = Instance.new("Frame")
-    keybindPanel.Size = UDim2.new(0, 370, 0, 240)
-    keybindPanel.Position = UDim2.new(0, 78, 0.5, -120)
+    local keybindPanel = Instance.new("ScrollingFrame")
+    keybindPanel.Size = UDim2.new(0, 376, 0, 520)
+    keybindPanel.Position = UDim2.new(0, 78, 0.5, -260)
+    keybindPanel.CanvasSize = UDim2.new(0, 0, 0, 800)
+    keybindPanel.ScrollingDirection = Enum.ScrollingDirection.Y
+    keybindPanel.ScrollBarThickness = 5
+    keybindPanel.ScrollBarImageColor3 = Color3.fromRGB(80, 90, 140)
     keybindPanel.BackgroundColor3 = Color3.fromRGB(15, 18, 32)
     keybindPanel.BorderSizePixel = 0
     keybindPanel.Visible = false
@@ -4787,31 +6716,6 @@ local function createOpenButton(mainGui)
     kbSep.ZIndex = KB_Z
     kbSep.Parent = keybindPanel
 
-    local kbQuickLabel = Instance.new("TextLabel")
-    kbQuickLabel.Size = UDim2.new(1, -28, 0, 18)
-    kbQuickLabel.Position = UDim2.new(0, 14, 0, 118)
-    kbQuickLabel.BackgroundTransparency = 1
-    kbQuickLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbQuickLabel.TextSize = 11
-    kbQuickLabel.Font = Enum.Font.Gotham
-    tReg(kbQuickLabel, "kb_quick")
-    kbQuickLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbQuickLabel.ZIndex = KB_Z
-    kbQuickLabel.Parent = keybindPanel
-
-    local quickKeys = {
-        { Enum.KeyCode.F1,"F1" }, { Enum.KeyCode.F2,"F2" }, { Enum.KeyCode.F3,"F3" },
-        { Enum.KeyCode.F4,"F4" }, { Enum.KeyCode.F5,"F5" }, { Enum.KeyCode.F6,"F6" },
-        { Enum.KeyCode.G,"G" }, { Enum.KeyCode.H,"H" }, { Enum.KeyCode.J,"J" },
-        { Enum.KeyCode.K,"K" }, { Enum.KeyCode.L,"L" }, { Enum.KeyCode.N,"N" },
-        { Enum.KeyCode.Zero,"0" }, { Enum.KeyCode.Nine,"9" }, { Enum.KeyCode.Eight,"8" },
-        { Enum.KeyCode.Seven,"7" }, { Enum.KeyCode.Six,"6" }, { Enum.KeyCode.Five,"5" },
-    }
-    local KB_BTN_W = 46
-    local KB_BTN_H = 30
-    local KB_BTN_PAD = 5
-    local KB_COLS = 6
-    local kbQuickBtns = {}
     local waitingForKey = false
 
     local function setOrbitKey(keyCode)
@@ -4821,11 +6725,6 @@ local function createOpenButton(mainGui)
         kbInfoLabel.Text = t("cv_apply_info")
         kbInfoLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
         kbCapOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-        for _, entry in ipairs(kbQuickBtns) do
-            entry.btn.BackgroundColor3 = (entry.code == keyCode)
-                and Color3.fromRGB(0, 160, 80)
-                or Color3.fromRGB(35, 40, 65)
-        end
     end
 
     local function enterListenMode()
@@ -4836,38 +6735,6 @@ local function createOpenButton(mainGui)
         kbInfoLabel.TextColor3 = Color3.fromRGB(255, 210, 60)
     end
 
-    for i, entry in ipairs(quickKeys) do
-        local col = (i - 1) % KB_COLS
-        local row = math.floor((i - 1) / KB_COLS)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, KB_BTN_W, 0, KB_BTN_H)
-        btn.Position = UDim2.new(0, 14 + col * (KB_BTN_W + KB_BTN_PAD), 0, 140 + row * (KB_BTN_H + KB_BTN_PAD))
-        btn.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-        btn.TextColor3 = Color3.fromRGB(220, 220, 255)
-        btn.TextSize = 12
-        btn.Font = Enum.Font.GothamBold
-        btn.Text = entry[2]
-        btn.BorderSizePixel = 0
-        btn.ZIndex = KB_Z
-        btn.Parent = keybindPanel
-        createRounded(btn, 6)
-        table.insert(kbQuickBtns, { btn = btn, code = entry[1] })
-
-        btn.MouseEnter:Connect(function()
-            if entry[1] ~= state.orbitToggleKey then
-                btn.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-            end
-        end)
-        btn.MouseLeave:Connect(function()
-            btn.BackgroundColor3 = (entry[1] == state.orbitToggleKey)
-                and Color3.fromRGB(0, 160, 80)
-                or Color3.fromRGB(35, 40, 65)
-        end)
-        btn.MouseButton1Click:Connect(function()
-            waitingForKey = false
-            setOrbitKey(entry[1])
-        end)
-    end
 
     local kbCustomBtn = Instance.new("TextButton")
     kbCustomBtn.Size = UDim2.new(0, 100, 0, 30)
@@ -4884,7 +6751,1272 @@ local function createOpenButton(mainGui)
 
     kbCustomBtn.MouseButton1Click:Connect(enterListenMode)
 
+    -- ---- Section studs Detectives Bizard ----
+    local kbSep2 = Instance.new("Frame")
+    kbSep2.Size = UDim2.new(1, -28, 0, 1)
+    kbSep2.Position = UDim2.new(0, 14, 0, 114)
+    kbSep2.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
+    kbSep2.BorderSizePixel = 0
+    kbSep2.ZIndex = KB_Z
+    kbSep2.Parent = keybindPanel
+
+    local kbStudsLabel = Instance.new("TextLabel")
+    kbStudsLabel.Size = UDim2.new(1, -28, 0, 16)
+    kbStudsLabel.Position = UDim2.new(0, 14, 0, 119)
+    kbStudsLabel.BackgroundTransparency = 1
+    kbStudsLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbStudsLabel.TextSize = 11
+    kbStudsLabel.Font = Enum.Font.Gotham
+    kbStudsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbStudsLabel.Text = "DET Detectives Bizard — studs"
+    kbStudsLabel.ZIndex = KB_Z
+    kbStudsLabel.Parent = keybindPanel
+
+    local kbStudsMinus = Instance.new("TextButton")
+    kbStudsMinus.Size = UDim2.new(0, 34, 0, 26)
+    kbStudsMinus.Position = UDim2.new(0, 14, 0, 138)
+    kbStudsMinus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbStudsMinus.TextColor3 = Color3.fromRGB(220, 220, 255)
+    kbStudsMinus.TextSize = 16
+    kbStudsMinus.Font = Enum.Font.GothamBold
+    kbStudsMinus.Text = "−"
+    kbStudsMinus.BorderSizePixel = 0
+    kbStudsMinus.ZIndex = KB_Z
+    kbStudsMinus.Parent = keybindPanel
+    createRounded(kbStudsMinus, 7)
+
+    local kbStudsVal = Instance.new("TextLabel")
+    kbStudsVal.Size = UDim2.new(0, 60, 0, 26)
+    kbStudsVal.Position = UDim2.new(0, 52, 0, 138)
+    kbStudsVal.BackgroundColor3 = Color3.fromRGB(22, 26, 46)
+    kbStudsVal.TextColor3 = Color3.fromRGB(255, 255, 255)
+    kbStudsVal.TextSize = 14
+    kbStudsVal.Font = Enum.Font.GothamBold
+    kbStudsVal.Text = tostring(state.mirrorStuds) .. " st"
+    kbStudsVal.BorderSizePixel = 0
+    kbStudsVal.ZIndex = KB_Z
+    kbStudsVal.Parent = keybindPanel
+    createRounded(kbStudsVal, 7)
+
+    local kbStudsPlus = Instance.new("TextButton")
+    kbStudsPlus.Size = UDim2.new(0, 34, 0, 26)
+    kbStudsPlus.Position = UDim2.new(0, 116, 0, 138)
+    kbStudsPlus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbStudsPlus.TextColor3 = Color3.fromRGB(220, 220, 255)
+    kbStudsPlus.TextSize = 16
+    kbStudsPlus.Font = Enum.Font.GothamBold
+    kbStudsPlus.Text = "+"
+    kbStudsPlus.BorderSizePixel = 0
+    kbStudsPlus.ZIndex = KB_Z
+    kbStudsPlus.Parent = keybindPanel
+    createRounded(kbStudsPlus, 7)
+
+    local function updateStudsDisplay()
+        kbStudsVal.Text = tostring(state.mirrorStuds) .. " st"
+    end
+
+    kbStudsMinus.MouseButton1Click:Connect(function()
+        state.mirrorStuds = math.max(6, state.mirrorStuds - 1)
+        updateStudsDisplay()
+    end)
+
+    kbStudsPlus.MouseButton1Click:Connect(function()
+        state.mirrorStuds = math.min(12, state.mirrorStuds + 1)
+        updateStudsDisplay()
+    end)
+
+    -- Separateur sons
+    local kbSoundSep = Instance.new("Frame")
+    kbSoundSep.Size = UDim2.new(1, -28, 0, 1)
+    kbSoundSep.Position = UDim2.new(0, 14, 0, 172)
+    kbSoundSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
+    kbSoundSep.BorderSizePixel = 0
+    kbSoundSep.ZIndex = KB_Z
+    kbSoundSep.Parent = keybindPanel
+
+    -- Bouton toggle son des poneys
+    local kbPoneySndBtn = Instance.new("TextButton")
+    kbPoneySndBtn.Size = UDim2.new(1, -28, 0, 28)
+    kbPoneySndBtn.Position = UDim2.new(0, 14, 0, 180)
+    kbPoneySndBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbPoneySndBtn.TextColor3 = Color3.fromRGB(220, 220, 255)
+    kbPoneySndBtn.TextSize = 13
+    kbPoneySndBtn.Font = Enum.Font.GothamBold
+    kbPoneySndBtn.BorderSizePixel = 0
+    kbPoneySndBtn.ZIndex = KB_Z
+    kbPoneySndBtn.Parent = keybindPanel
+    createRounded(kbPoneySndBtn, 7)
+
+    local function updatePoneySndBtn()
+        kbPoneySndBtn.Text = state.poneySoundEnabled and t("kb_poney_snd_on") or t("kb_poney_snd_off")
+        kbPoneySndBtn.BackgroundColor3 = state.poneySoundEnabled
+            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+    end
+    updatePoneySndBtn()
+
+    kbPoneySndBtn.MouseButton1Click:Connect(function()
+        state.poneySoundEnabled = not state.poneySoundEnabled
+        refreshPoneySounds()
+        updatePoneySndBtn()
+    end)
+
+    -- Bouton toggle sirene police
+    local kbPoliceSndBtn = Instance.new("TextButton")
+    kbPoliceSndBtn.Size = UDim2.new(1, -28, 0, 28)
+    kbPoliceSndBtn.Position = UDim2.new(0, 14, 0, 214)
+    kbPoliceSndBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbPoliceSndBtn.TextColor3 = Color3.fromRGB(220, 220, 255)
+    kbPoliceSndBtn.TextSize = 13
+    kbPoliceSndBtn.Font = Enum.Font.GothamBold
+    kbPoliceSndBtn.BorderSizePixel = 0
+    kbPoliceSndBtn.ZIndex = KB_Z
+    kbPoliceSndBtn.Parent = keybindPanel
+    createRounded(kbPoliceSndBtn, 7)
+
+    local function updatePoliceSndBtn()
+        kbPoliceSndBtn.Text = state.policeSoundEnabled and t("kb_police_snd_on") or t("kb_police_snd_off")
+        kbPoliceSndBtn.BackgroundColor3 = state.policeSoundEnabled
+            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+    end
+    updatePoliceSndBtn()
+
+    kbPoliceSndBtn.MouseButton1Click:Connect(function()
+        state.policeSoundEnabled = not state.policeSoundEnabled
+        refreshPoliceSounds()
+        updatePoliceSndBtn()
+    end)
+
     setOrbitKey(state.orbitToggleKey)
+
+    -- ---- Section touche accélération boost vitesse ----
+    local kbAccelSep = Instance.new("Frame")
+    kbAccelSep.Size = UDim2.new(1, -28, 0, 1)
+    kbAccelSep.Position = UDim2.new(0, 14, 0, 248)
+    kbAccelSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
+    kbAccelSep.BorderSizePixel = 0
+    kbAccelSep.ZIndex = KB_Z
+    kbAccelSep.Parent = keybindPanel
+
+    local kbAccelLabel = Instance.new("TextLabel")
+    kbAccelLabel.Size = UDim2.new(1, -28, 0, 16)
+    kbAccelLabel.Position = UDim2.new(0, 14, 0, 254)
+    kbAccelLabel.BackgroundTransparency = 1
+    kbAccelLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbAccelLabel.TextSize = 11
+    kbAccelLabel.Font = Enum.Font.Gotham
+    kbAccelLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbAccelLabel.Text = t("kb_accel_label")
+    kbAccelLabel.ZIndex = KB_Z
+    kbAccelLabel.Parent = keybindPanel
+
+    local kbAccelKeyOuter = Instance.new("Frame")
+    kbAccelKeyOuter.Size = UDim2.new(0, 70, 0, 40)
+    kbAccelKeyOuter.Position = UDim2.new(0, 14, 0, 274)
+    kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+    kbAccelKeyOuter.BorderSizePixel = 0
+    kbAccelKeyOuter.ZIndex = KB_Z
+    kbAccelKeyOuter.Parent = keybindPanel
+    createRounded(kbAccelKeyOuter, 8)
+
+    local kbAccelKeyInner = Instance.new("Frame")
+    kbAccelKeyInner.Size = UDim2.new(1, -6, 1, -6)
+    kbAccelKeyInner.Position = UDim2.new(0, 3, 0, 3)
+    kbAccelKeyInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+    kbAccelKeyInner.BorderSizePixel = 0
+    kbAccelKeyInner.ZIndex = KB_Z
+    kbAccelKeyInner.Parent = kbAccelKeyOuter
+    createRounded(kbAccelKeyInner, 6)
+
+    local kbAccelKeyLabel = Instance.new("TextLabel")
+    kbAccelKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+    kbAccelKeyLabel.BackgroundTransparency = 1
+    kbAccelKeyLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+    kbAccelKeyLabel.TextSize = 16
+    kbAccelKeyLabel.Font = Enum.Font.GothamBold
+    kbAccelKeyLabel.ZIndex = KB_Z
+    kbAccelKeyLabel.Parent = kbAccelKeyInner
+
+    local kbAccelChangeBtn = Instance.new("TextButton")
+    kbAccelChangeBtn.Size = UDim2.new(0, 110, 0, 30)
+    kbAccelChangeBtn.Position = UDim2.new(0, 92, 0, 279)
+    kbAccelChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+    kbAccelChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+    kbAccelChangeBtn.TextSize = 11
+    kbAccelChangeBtn.Font = Enum.Font.GothamBold
+    kbAccelChangeBtn.Text = t("kb_accel_change")
+    kbAccelChangeBtn.BorderSizePixel = 0
+    kbAccelChangeBtn.ZIndex = KB_Z
+    kbAccelChangeBtn.Parent = keybindPanel
+    createRounded(kbAccelChangeBtn, 8)
+
+    local kbAccelStatusLabel = Instance.new("TextLabel")
+    kbAccelStatusLabel.Size = UDim2.new(0, 150, 0, 30)
+    kbAccelStatusLabel.Position = UDim2.new(0, 210, 0, 279)
+    kbAccelStatusLabel.BackgroundTransparency = 1
+    kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+    kbAccelStatusLabel.TextSize = 11
+    kbAccelStatusLabel.Font = Enum.Font.Gotham
+    kbAccelStatusLabel.TextWrapped = true
+    kbAccelStatusLabel.ZIndex = KB_Z
+    kbAccelStatusLabel.Parent = keybindPanel
+
+    local waitingForAccelKey = false
+
+    local function setAccelKey(keyCode)
+        state.accelKey = keyCode
+        local name = tostring(keyCode):gsub("Enum%.KeyCode%.", "")
+        kbAccelKeyLabel.Text = name
+        kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+        kbAccelStatusLabel.Text = t("kb_accel_saved")
+        kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+        waitingForAccelKey = false
+    end
+
+    setAccelKey(state.accelKey)
+
+    kbAccelChangeBtn.MouseButton1Click:Connect(function()
+        waitingForAccelKey = true
+        waitingForKey = false  -- desactive l'ecoute orbit si active
+        kbAccelKeyLabel.Text = "?"
+        kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+        kbAccelStatusLabel.Text = t("kb_accel_listen")
+        kbAccelStatusLabel.TextColor3 = Color3.fromRGB(255, 210, 60)
+    end)
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not waitingForAccelKey then return end
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if input.KeyCode == Enum.KeyCode.Escape then
+            waitingForAccelKey = false
+            setAccelKey(state.accelKey)
+            return
+        end
+        setAccelKey(input.KeyCode)
+    end)
+
+    -- ---- Section toggles police notif & role badge ----
+    local kbToggleSep = Instance.new("Frame")
+    kbToggleSep.Size = UDim2.new(1, -28, 0, 1)
+    kbToggleSep.Position = UDim2.new(0, 14, 0, 324)
+    kbToggleSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
+    kbToggleSep.BorderSizePixel = 0
+    kbToggleSep.ZIndex = KB_Z
+    kbToggleSep.Parent = keybindPanel
+
+    local kbToggleSepLabel = Instance.new("TextLabel")
+    kbToggleSepLabel.Size = UDim2.new(1, -28, 0, 14)
+    kbToggleSepLabel.Position = UDim2.new(0, 14, 0, 330)
+    kbToggleSepLabel.BackgroundTransparency = 1
+    kbToggleSepLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbToggleSepLabel.TextSize = 11
+    kbToggleSepLabel.Font = Enum.Font.Gotham
+    kbToggleSepLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbToggleSepLabel.Text = t("kb_hud_section")
+    kbToggleSepLabel.ZIndex = KB_Z
+    kbToggleSepLabel.Parent = keybindPanel
+
+    local kbPoliceNotifBtn = Instance.new("TextButton")
+    kbPoliceNotifBtn.Size = UDim2.new(1, -28, 0, 28)
+    kbPoliceNotifBtn.Position = UDim2.new(0, 14, 0, 348)
+    kbPoliceNotifBtn.TextSize = 13
+    kbPoliceNotifBtn.Font = Enum.Font.GothamBold
+    kbPoliceNotifBtn.BorderSizePixel = 0
+    kbPoliceNotifBtn.ZIndex = KB_Z
+    kbPoliceNotifBtn.Parent = keybindPanel
+    createRounded(kbPoliceNotifBtn, 7)
+
+    local kbRoleBtn = Instance.new("TextButton")
+    kbRoleBtn.Size = UDim2.new(1, -28, 0, 28)
+    kbRoleBtn.Position = UDim2.new(0, 14, 0, 382)
+    kbRoleBtn.TextSize = 13
+    kbRoleBtn.Font = Enum.Font.GothamBold
+    kbRoleBtn.BorderSizePixel = 0
+    kbRoleBtn.ZIndex = KB_Z
+    kbRoleBtn.Parent = keybindPanel
+    createRounded(kbRoleBtn, 7)
+
+    local function updatePoliceNotifBtn()
+        kbPoliceNotifBtn.Text = state.policeNotifEnabled
+            and t("kb_police_notif_on")
+            or  t("kb_police_notif_off")
+        kbPoliceNotifBtn.BackgroundColor3 = state.policeNotifEnabled
+            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+        kbPoliceNotifBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+    end
+
+    local function updateRoleBtn()
+        kbRoleBtn.Text = state.roleDisplayEnabled
+            and t("kb_role_badge_on")
+            or  t("kb_role_badge_off")
+        kbRoleBtn.BackgroundColor3 = state.roleDisplayEnabled
+            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+        kbRoleBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+    end
+
+    updatePoliceNotifBtn()
+    updateRoleBtn()
+
+    kbPoliceNotifBtn.MouseButton1Click:Connect(function()
+        state.policeNotifEnabled = not state.policeNotifEnabled
+        updatePoliceNotifBtn()
+    end)
+
+    kbRoleBtn.MouseButton1Click:Connect(function()
+        state.roleDisplayEnabled = not state.roleDisplayEnabled
+        updateRoleBtn()
+    end)
+
+    -- ---- Slider detection policier ----
+    local kbDistSep = Instance.new("Frame")
+    kbDistSep.Size = UDim2.new(1, -28, 0, 1)
+    kbDistSep.Position = UDim2.new(0, 14, 0, 418)
+    kbDistSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
+    kbDistSep.BorderSizePixel = 0
+    kbDistSep.ZIndex = KB_Z
+    kbDistSep.Parent = keybindPanel
+
+    local kbDistLabel = Instance.new("TextLabel")
+    kbDistLabel.Size = UDim2.new(0, 220, 0, 14)
+    kbDistLabel.Position = UDim2.new(0, 14, 0, 425)
+    kbDistLabel.BackgroundTransparency = 1
+    kbDistLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbDistLabel.TextSize = 11
+    kbDistLabel.Font = Enum.Font.Gotham
+    kbDistLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbDistLabel.Text = t("kb_police_dist")
+    kbDistLabel.ZIndex = KB_Z
+    kbDistLabel.Parent = keybindPanel
+
+    local kbDistValLabel = Instance.new("TextLabel")
+    kbDistValLabel.Size = UDim2.new(0, 80, 0, 14)
+    kbDistValLabel.Position = UDim2.new(1, -94, 0, 425)
+    kbDistValLabel.BackgroundTransparency = 1
+    kbDistValLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+    kbDistValLabel.TextSize = 11
+    kbDistValLabel.Font = Enum.Font.GothamBold
+    kbDistValLabel.TextXAlignment = Enum.TextXAlignment.Right
+    kbDistValLabel.Text = tostring(state.policeDetectDist) .. " m"
+    kbDistValLabel.ZIndex = KB_Z
+    kbDistValLabel.Parent = keybindPanel
+
+    -- Rail du slider
+    local kbDistTrack = Instance.new("Frame")
+    kbDistTrack.Size = UDim2.new(1, -28, 0, 8)
+    kbDistTrack.Position = UDim2.new(0, 14, 0, 445)
+    kbDistTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbDistTrack.BorderSizePixel = 0
+    kbDistTrack.ZIndex = KB_Z
+    kbDistTrack.Parent = keybindPanel
+    createRounded(kbDistTrack, 4)
+
+    local kbDistFill = Instance.new("Frame")
+    kbDistFill.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+    kbDistFill.BorderSizePixel = 0
+    kbDistFill.ZIndex = KB_Z
+    kbDistFill.Parent = kbDistTrack
+    createRounded(kbDistFill, 4)
+
+    local kbDistHandle = Instance.new("TextButton")
+    kbDistHandle.Size = UDim2.new(0, 18, 0, 18)
+    kbDistHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    kbDistHandle.Text = ""
+    kbDistHandle.BorderSizePixel = 0
+    kbDistHandle.ZIndex = KB_Z + 1
+    kbDistHandle.Parent = kbDistTrack
+    createRounded(kbDistHandle, 9)
+
+    local DIST_MIN, DIST_MAX = 50, 500
+
+    local function updateDistSlider()
+        local pct = (state.policeDetectDist - DIST_MIN) / (DIST_MAX - DIST_MIN)
+        kbDistFill.Size = UDim2.new(pct, 0, 1, 0)
+        kbDistHandle.Position = UDim2.new(pct, -9, 0.5, -9)
+        kbDistValLabel.Text = tostring(state.policeDetectDist) .. " m"
+    end
+    updateDistSlider()
+
+    local draggingDist = false
+    kbDistHandle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            draggingDist = true
+            keybindPanel.ScrollingEnabled = false
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            draggingDist = false
+            keybindPanel.ScrollingEnabled = true
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if not draggingDist then return end
+        if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        local trackPos = kbDistTrack.AbsolutePosition
+        local trackSize = kbDistTrack.AbsoluteSize
+        local relX = math.clamp(inp.Position.X - trackPos.X, 0, trackSize.X)
+        local pct = relX / trackSize.X
+        local raw = DIST_MIN + pct * (DIST_MAX - DIST_MIN)
+        state.policeDetectDist = math.floor(raw / 10 + 0.5) * 10  -- snap 10m
+        updateDistSlider()
+    end)
+
+    -- ---- Toggle simulation vehicule ----
+    local kbVehSimSep = Instance.new("Frame")
+    kbVehSimSep.Size = UDim2.new(1, -28, 0, 1)
+    kbVehSimSep.Position = UDim2.new(0, 14, 0, 464)
+    kbVehSimSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
+    kbVehSimSep.BorderSizePixel = 0
+    kbVehSimSep.ZIndex = KB_Z
+    kbVehSimSep.Parent = keybindPanel
+
+    local kbVehSimBtn = Instance.new("TextButton")
+    kbVehSimBtn.Size = UDim2.new(1, -28, 0, 28)
+    kbVehSimBtn.Position = UDim2.new(0, 14, 0, 472)
+    kbVehSimBtn.TextSize = 13
+    kbVehSimBtn.Font = Enum.Font.GothamBold
+    kbVehSimBtn.BorderSizePixel = 0
+    kbVehSimBtn.ZIndex = KB_Z
+    kbVehSimBtn.Parent = keybindPanel
+    createRounded(kbVehSimBtn, 7)
+
+    local function updateVehSimBtn()
+        if state.vehSimEnabled then
+            -- Verifier si le vehicule du joueur a le contact ON (sim inutile)
+            local char = player.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local seat = hum and hum.SeatPart
+            local vehModel = seat and seat:FindFirstAncestorOfClass("Model")
+            local contactOn = vehModel and vehModel:GetAttribute("IsOn")
+            if contactOn then
+                kbVehSimBtn.Text = t("kb_vehsim_contact_on")
+                kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(160, 50, 20)
+                kbVehSimBtn.TextColor3 = Color3.fromRGB(255, 200, 180)
+                return
+            end
+            kbVehSimBtn.Text = t("kb_vehsim_on")
+            kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 50)
+        else
+            kbVehSimBtn.Text = t("kb_vehsim_off")
+            kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+        end
+        kbVehSimBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+    end
+    updateVehSimBtn()
+
+    -- Mise a jour periodique du bouton (detecte changement IsOn)
+    task.spawn(function()
+        while keybindPanel.Parent do
+            task.wait(0.5)
+            if state.vehSimEnabled then updateVehSimBtn() end
+        end
+    end)
+
+    kbVehSimBtn.MouseButton1Click:Connect(function()
+        state.vehSimEnabled = not state.vehSimEnabled
+        if not state.vehSimEnabled then
+            -- Reset attributs et donnees quand on desactive
+            local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+            if vehiclesFolder then
+                for _, veh in ipairs(vehiclesFolder:GetChildren()) do
+                    if veh:IsA("Model") and not veh:GetAttribute("IsOn") then
+                        pcall(function() veh:SetAttribute("Throttle", 0) end)
+                        pcall(function() veh:SetAttribute("Steering", 0) end)
+                    end
+                end
+            end
+            vehSimData = {}
+        end
+        updateVehSimBtn()
+    end)
+
+    -- ---- Controles Sim Vehicule (touches + vitesses) ----
+    local kbSimCtrlSep = Instance.new("Frame")
+    kbSimCtrlSep.Size = UDim2.new(1, -28, 0, 1)
+    kbSimCtrlSep.Position = UDim2.new(0, 14, 0, 504)
+    kbSimCtrlSep.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
+    kbSimCtrlSep.BorderSizePixel = 0
+    kbSimCtrlSep.ZIndex = KB_Z
+    kbSimCtrlSep.Parent = keybindPanel
+
+    -- Touche avancer
+    local kbSimFwdLabel = Instance.new("TextLabel")
+    kbSimFwdLabel.Size = UDim2.new(1, -28, 0, 14)
+    kbSimFwdLabel.Position = UDim2.new(0, 14, 0, 510)
+    kbSimFwdLabel.BackgroundTransparency = 1
+    kbSimFwdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbSimFwdLabel.TextSize = 11
+    kbSimFwdLabel.Font = Enum.Font.Gotham
+    kbSimFwdLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbSimFwdLabel.Text = t("kb_sim_fwd_label")
+    kbSimFwdLabel.ZIndex = KB_Z
+    kbSimFwdLabel.Parent = keybindPanel
+
+    local kbSimFwdOuter = Instance.new("Frame")
+    kbSimFwdOuter.Size = UDim2.new(0, 50, 0, 32)
+    kbSimFwdOuter.Position = UDim2.new(0, 14, 0, 526)
+    kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+    kbSimFwdOuter.BorderSizePixel = 0
+    kbSimFwdOuter.ZIndex = KB_Z
+    kbSimFwdOuter.Parent = keybindPanel
+    createRounded(kbSimFwdOuter, 7)
+
+    local kbSimFwdInner = Instance.new("Frame")
+    kbSimFwdInner.Size = UDim2.new(1, -6, 1, -6)
+    kbSimFwdInner.Position = UDim2.new(0, 3, 0, 3)
+    kbSimFwdInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+    kbSimFwdInner.BorderSizePixel = 0
+    kbSimFwdInner.ZIndex = KB_Z
+    kbSimFwdInner.Parent = kbSimFwdOuter
+    createRounded(kbSimFwdInner, 5)
+
+    local kbSimFwdKeyLabel = Instance.new("TextLabel")
+    kbSimFwdKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+    kbSimFwdKeyLabel.BackgroundTransparency = 1
+    kbSimFwdKeyLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+    kbSimFwdKeyLabel.TextSize = 14
+    kbSimFwdKeyLabel.Font = Enum.Font.GothamBold
+    kbSimFwdKeyLabel.ZIndex = KB_Z
+    kbSimFwdKeyLabel.Parent = kbSimFwdInner
+
+    local kbSimFwdChangeBtn = Instance.new("TextButton")
+    kbSimFwdChangeBtn.Size = UDim2.new(0, 100, 0, 26)
+    kbSimFwdChangeBtn.Position = UDim2.new(0, 70, 0, 529)
+    kbSimFwdChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+    kbSimFwdChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+    kbSimFwdChangeBtn.TextSize = 11
+    kbSimFwdChangeBtn.Font = Enum.Font.GothamBold
+    kbSimFwdChangeBtn.Text = "CHANGER TOUCHE"
+    kbSimFwdChangeBtn.BorderSizePixel = 0
+    kbSimFwdChangeBtn.ZIndex = KB_Z
+    kbSimFwdChangeBtn.Parent = keybindPanel
+    createRounded(kbSimFwdChangeBtn, 7)
+
+    local kbSimFwdStatus = Instance.new("TextLabel")
+    kbSimFwdStatus.Size = UDim2.new(0, 120, 0, 26)
+    kbSimFwdStatus.Position = UDim2.new(0, 176, 0, 529)
+    kbSimFwdStatus.BackgroundTransparency = 1
+    kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+    kbSimFwdStatus.TextSize = 11
+    kbSimFwdStatus.Font = Enum.Font.Gotham
+    kbSimFwdStatus.TextWrapped = true
+    kbSimFwdStatus.ZIndex = KB_Z
+    kbSimFwdStatus.Parent = keybindPanel
+
+    -- Touche reculer
+    local kbSimRevLabel = Instance.new("TextLabel")
+    kbSimRevLabel.Size = UDim2.new(1, -28, 0, 14)
+    kbSimRevLabel.Position = UDim2.new(0, 14, 0, 564)
+    kbSimRevLabel.BackgroundTransparency = 1
+    kbSimRevLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbSimRevLabel.TextSize = 11
+    kbSimRevLabel.Font = Enum.Font.Gotham
+    kbSimRevLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbSimRevLabel.Text = t("kb_sim_rev_label")
+    kbSimRevLabel.ZIndex = KB_Z
+    kbSimRevLabel.Parent = keybindPanel
+
+    local kbSimRevOuter = Instance.new("Frame")
+    kbSimRevOuter.Size = UDim2.new(0, 50, 0, 32)
+    kbSimRevOuter.Position = UDim2.new(0, 14, 0, 580)
+    kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+    kbSimRevOuter.BorderSizePixel = 0
+    kbSimRevOuter.ZIndex = KB_Z
+    kbSimRevOuter.Parent = keybindPanel
+    createRounded(kbSimRevOuter, 7)
+
+    local kbSimRevInner = Instance.new("Frame")
+    kbSimRevInner.Size = UDim2.new(1, -6, 1, -6)
+    kbSimRevInner.Position = UDim2.new(0, 3, 0, 3)
+    kbSimRevInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+    kbSimRevInner.BorderSizePixel = 0
+    kbSimRevInner.ZIndex = KB_Z
+    kbSimRevInner.Parent = kbSimRevOuter
+    createRounded(kbSimRevInner, 5)
+
+    local kbSimRevKeyLabel = Instance.new("TextLabel")
+    kbSimRevKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+    kbSimRevKeyLabel.BackgroundTransparency = 1
+    kbSimRevKeyLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+    kbSimRevKeyLabel.TextSize = 14
+    kbSimRevKeyLabel.Font = Enum.Font.GothamBold
+    kbSimRevKeyLabel.ZIndex = KB_Z
+    kbSimRevKeyLabel.Parent = kbSimRevInner
+
+    local kbSimRevChangeBtn = Instance.new("TextButton")
+    kbSimRevChangeBtn.Size = UDim2.new(0, 100, 0, 26)
+    kbSimRevChangeBtn.Position = UDim2.new(0, 70, 0, 583)
+    kbSimRevChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+    kbSimRevChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+    kbSimRevChangeBtn.TextSize = 11
+    kbSimRevChangeBtn.Font = Enum.Font.GothamBold
+    kbSimRevChangeBtn.Text = "CHANGER TOUCHE"
+    kbSimRevChangeBtn.BorderSizePixel = 0
+    kbSimRevChangeBtn.ZIndex = KB_Z
+    kbSimRevChangeBtn.Parent = keybindPanel
+    createRounded(kbSimRevChangeBtn, 7)
+
+    local kbSimRevStatus = Instance.new("TextLabel")
+    kbSimRevStatus.Size = UDim2.new(0, 120, 0, 26)
+    kbSimRevStatus.Position = UDim2.new(0, 176, 0, 583)
+    kbSimRevStatus.BackgroundTransparency = 1
+    kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+    kbSimRevStatus.TextSize = 11
+    kbSimRevStatus.Font = Enum.Font.Gotham
+    kbSimRevStatus.TextWrapped = true
+    kbSimRevStatus.ZIndex = KB_Z
+    kbSimRevStatus.Parent = keybindPanel
+
+    -- Logique key listeners sim
+    local waitingSimFwd, waitingSimRev = false, false
+
+    local function setSimFwdKey(kc)
+        state.simFwdKey = kc
+        kbSimFwdKeyLabel.Text = tostring(kc):gsub("Enum%.KeyCode%.", "")
+        kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+        kbSimFwdStatus.Text = "Sauvegarde !"
+        kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+        waitingSimFwd = false
+    end
+
+    local function setSimRevKey(kc)
+        state.simRevKey = kc
+        kbSimRevKeyLabel.Text = tostring(kc):gsub("Enum%.KeyCode%.", "")
+        kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+        kbSimRevStatus.Text = "Sauvegarde !"
+        kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+        waitingSimRev = false
+    end
+
+    setSimFwdKey(state.simFwdKey)
+    setSimRevKey(state.simRevKey)
+
+    kbSimFwdChangeBtn.MouseButton1Click:Connect(function()
+        waitingSimFwd = true
+        waitingSimRev = false
+        kbSimFwdKeyLabel.Text = "?"
+        kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+        kbSimFwdStatus.Text = "Appuie une touche..."
+        kbSimFwdStatus.TextColor3 = Color3.fromRGB(255, 210, 60)
+    end)
+
+    kbSimRevChangeBtn.MouseButton1Click:Connect(function()
+        waitingSimRev = true
+        waitingSimFwd = false
+        kbSimRevKeyLabel.Text = "?"
+        kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+        kbSimRevStatus.Text = "Appuie une touche..."
+        kbSimRevStatus.TextColor3 = Color3.fromRGB(255, 210, 60)
+    end)
+
+    UserInputService.InputBegan:Connect(function(input, _gp)
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if input.KeyCode == Enum.KeyCode.Escape then
+            if waitingSimFwd then setSimFwdKey(state.simFwdKey) end
+            if waitingSimRev then setSimRevKey(state.simRevKey) end
+            return
+        end
+        if waitingSimFwd then setSimFwdKey(input.KeyCode) return end
+        if waitingSimRev then setSimRevKey(input.KeyCode) return end
+    end)
+
+    -- Sliders vitesses sim
+    local kbSimSpeedSep = Instance.new("Frame")
+    kbSimSpeedSep.Size = UDim2.new(1, -28, 0, 1)
+    kbSimSpeedSep.Position = UDim2.new(0, 14, 0, 620)
+    kbSimSpeedSep.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
+    kbSimSpeedSep.BorderSizePixel = 0
+    kbSimSpeedSep.ZIndex = KB_Z
+    kbSimSpeedSep.Parent = keybindPanel
+
+    -- Slider vitesse max avancer
+    local kbSimFwdSpdLabel = Instance.new("TextLabel")
+    kbSimFwdSpdLabel.Size = UDim2.new(0, 220, 0, 14)
+    kbSimFwdSpdLabel.Position = UDim2.new(0, 14, 0, 626)
+    kbSimFwdSpdLabel.BackgroundTransparency = 1
+    kbSimFwdSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbSimFwdSpdLabel.TextSize = 11
+    kbSimFwdSpdLabel.Font = Enum.Font.Gotham
+    kbSimFwdSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbSimFwdSpdLabel.Text = t("kb_sim_speed_fwd")
+    kbSimFwdSpdLabel.ZIndex = KB_Z
+    kbSimFwdSpdLabel.Parent = keybindPanel
+
+    local kbSimFwdSpdVal = Instance.new("TextLabel")
+    kbSimFwdSpdVal.Size = UDim2.new(0, 60, 0, 14)
+    kbSimFwdSpdVal.Position = UDim2.new(1, -74, 0, 626)
+    kbSimFwdSpdVal.BackgroundTransparency = 1
+    kbSimFwdSpdVal.TextColor3 = Color3.fromRGB(0, 200, 255)
+    kbSimFwdSpdVal.TextSize = 11
+    kbSimFwdSpdVal.Font = Enum.Font.GothamBold
+    kbSimFwdSpdVal.TextXAlignment = Enum.TextXAlignment.Right
+    kbSimFwdSpdVal.ZIndex = KB_Z
+    kbSimFwdSpdVal.Parent = keybindPanel
+
+    local kbSimFwdSpdTrack = Instance.new("Frame")
+    kbSimFwdSpdTrack.Size = UDim2.new(1, -28, 0, 8)
+    kbSimFwdSpdTrack.Position = UDim2.new(0, 14, 0, 642)
+    kbSimFwdSpdTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbSimFwdSpdTrack.BorderSizePixel = 0
+    kbSimFwdSpdTrack.ZIndex = KB_Z
+    kbSimFwdSpdTrack.Parent = keybindPanel
+    createRounded(kbSimFwdSpdTrack, 4)
+
+    local kbSimFwdSpdFill = Instance.new("Frame")
+    kbSimFwdSpdFill.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
+    kbSimFwdSpdFill.BorderSizePixel = 0
+    kbSimFwdSpdFill.ZIndex = KB_Z
+    kbSimFwdSpdFill.Parent = kbSimFwdSpdTrack
+    createRounded(kbSimFwdSpdFill, 4)
+
+    local kbSimFwdSpdHandle = Instance.new("TextButton")
+    kbSimFwdSpdHandle.Size = UDim2.new(0, 18, 0, 18)
+    kbSimFwdSpdHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    kbSimFwdSpdHandle.Text = ""
+    kbSimFwdSpdHandle.BorderSizePixel = 0
+    kbSimFwdSpdHandle.ZIndex = KB_Z + 1
+    kbSimFwdSpdHandle.Parent = kbSimFwdSpdTrack
+    createRounded(kbSimFwdSpdHandle, 9)
+
+    -- Slider vitesse max reculer
+    local kbSimRevSpdLabel = Instance.new("TextLabel")
+    kbSimRevSpdLabel.Size = UDim2.new(0, 220, 0, 14)
+    kbSimRevSpdLabel.Position = UDim2.new(0, 14, 0, 658)
+    kbSimRevSpdLabel.BackgroundTransparency = 1
+    kbSimRevSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbSimRevSpdLabel.TextSize = 11
+    kbSimRevSpdLabel.Font = Enum.Font.Gotham
+    kbSimRevSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbSimRevSpdLabel.Text = t("kb_sim_speed_rev")
+    kbSimRevSpdLabel.ZIndex = KB_Z
+    kbSimRevSpdLabel.Parent = keybindPanel
+
+    local kbSimRevSpdVal = Instance.new("TextLabel")
+    kbSimRevSpdVal.Size = UDim2.new(0, 60, 0, 14)
+    kbSimRevSpdVal.Position = UDim2.new(1, -74, 0, 658)
+    kbSimRevSpdVal.BackgroundTransparency = 1
+    kbSimRevSpdVal.TextColor3 = Color3.fromRGB(0, 200, 255)
+    kbSimRevSpdVal.TextSize = 11
+    kbSimRevSpdVal.Font = Enum.Font.GothamBold
+    kbSimRevSpdVal.TextXAlignment = Enum.TextXAlignment.Right
+    kbSimRevSpdVal.ZIndex = KB_Z
+    kbSimRevSpdVal.Parent = keybindPanel
+
+    local kbSimRevSpdTrack = Instance.new("Frame")
+    kbSimRevSpdTrack.Size = UDim2.new(1, -28, 0, 8)
+    kbSimRevSpdTrack.Position = UDim2.new(0, 14, 0, 674)
+    kbSimRevSpdTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbSimRevSpdTrack.BorderSizePixel = 0
+    kbSimRevSpdTrack.ZIndex = KB_Z
+    kbSimRevSpdTrack.Parent = keybindPanel
+    createRounded(kbSimRevSpdTrack, 4)
+
+    local kbSimRevSpdFill = Instance.new("Frame")
+    kbSimRevSpdFill.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+    kbSimRevSpdFill.BorderSizePixel = 0
+    kbSimRevSpdFill.ZIndex = KB_Z
+    kbSimRevSpdFill.Parent = kbSimRevSpdTrack
+    createRounded(kbSimRevSpdFill, 4)
+
+    local kbSimRevSpdHandle = Instance.new("TextButton")
+    kbSimRevSpdHandle.Size = UDim2.new(0, 18, 0, 18)
+    kbSimRevSpdHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    kbSimRevSpdHandle.Text = ""
+    kbSimRevSpdHandle.BorderSizePixel = 0
+    kbSimRevSpdHandle.ZIndex = KB_Z + 1
+    kbSimRevSpdHandle.Parent = kbSimRevSpdTrack
+    createRounded(kbSimRevSpdHandle, 9)
+
+    -- Logique sliders sim
+    local SIM_FWD_MIN, SIM_FWD_MAX = 10, 200
+    local SIM_REV_MIN, SIM_REV_MAX = 5,  80
+
+    local function updateSimFwdSlider()
+        local pct = (state.simMaxFwd - SIM_FWD_MIN) / (SIM_FWD_MAX - SIM_FWD_MIN)
+        kbSimFwdSpdFill.Size = UDim2.new(pct, 0, 1, 0)
+        kbSimFwdSpdHandle.Position = UDim2.new(pct, -9, 0.5, -9)
+        kbSimFwdSpdVal.Text = tostring(state.simMaxFwd)
+    end
+
+    local function updateSimRevSlider()
+        local pct = (state.simMaxRev - SIM_REV_MIN) / (SIM_REV_MAX - SIM_REV_MIN)
+        kbSimRevSpdFill.Size = UDim2.new(pct, 0, 1, 0)
+        kbSimRevSpdHandle.Position = UDim2.new(pct, -9, 0.5, -9)
+        kbSimRevSpdVal.Text = tostring(state.simMaxRev)
+    end
+
+    updateSimFwdSlider()
+    updateSimRevSlider()
+
+    local draggingSimFwd, draggingSimRev, draggingSimAccel = false, false, false
+    local SIM_ACCEL_MIN, SIM_ACCEL_MAX = 5, 120
+
+    local function startDrag(which)
+        draggingSimFwd   = which == "fwd"
+        draggingSimRev   = which == "rev"
+        draggingSimAccel = which == "accel"
+        keybindPanel.ScrollingEnabled = false  -- empeche le ScrollingFrame de voler l'input
+    end
+
+    local function stopDrag()
+        draggingSimFwd = false
+        draggingSimRev = false
+        draggingSimAccel = false
+        keybindPanel.ScrollingEnabled = true
+    end
+
+    kbSimFwdSpdHandle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then startDrag("fwd") end
+    end)
+    kbSimRevSpdHandle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then startDrag("rev") end
+    end)
+
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then stopDrag() end
+    end)
+
+    UserInputService.InputChanged:Connect(function(inp)
+        if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        if draggingSimFwd then
+            local tp = kbSimFwdSpdTrack.AbsolutePosition
+            local ts = kbSimFwdSpdTrack.AbsoluteSize
+            local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
+            state.simMaxFwd = math.floor(SIM_FWD_MIN + pct * (SIM_FWD_MAX - SIM_FWD_MIN) + 0.5)
+            updateSimFwdSlider()
+        elseif draggingSimRev then
+            local tp = kbSimRevSpdTrack.AbsolutePosition
+            local ts = kbSimRevSpdTrack.AbsoluteSize
+            local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
+            state.simMaxRev = math.floor(SIM_REV_MIN + pct * (SIM_REV_MAX - SIM_REV_MIN) + 0.5)
+            updateSimRevSlider()
+        end
+    end)
+
+    -- Slider acceleration
+    local kbSimAccelLabel = Instance.new("TextLabel")
+    kbSimAccelLabel.Size = UDim2.new(0, 220, 0, 14)
+    kbSimAccelLabel.Position = UDim2.new(0, 14, 0, 690)
+    kbSimAccelLabel.BackgroundTransparency = 1
+    kbSimAccelLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+    kbSimAccelLabel.TextSize = 11
+    kbSimAccelLabel.Font = Enum.Font.Gotham
+    kbSimAccelLabel.TextXAlignment = Enum.TextXAlignment.Left
+    kbSimAccelLabel.Text = t("kb_sim_accel_label")
+    kbSimAccelLabel.ZIndex = KB_Z
+    kbSimAccelLabel.Parent = keybindPanel
+
+    local kbSimAccelVal = Instance.new("TextLabel")
+    kbSimAccelVal.Size = UDim2.new(0, 60, 0, 14)
+    kbSimAccelVal.Position = UDim2.new(1, -74, 0, 690)
+    kbSimAccelVal.BackgroundTransparency = 1
+    kbSimAccelVal.TextColor3 = Color3.fromRGB(0, 200, 255)
+    kbSimAccelVal.TextSize = 11
+    kbSimAccelVal.Font = Enum.Font.GothamBold
+    kbSimAccelVal.TextXAlignment = Enum.TextXAlignment.Right
+    kbSimAccelVal.ZIndex = KB_Z
+    kbSimAccelVal.Parent = keybindPanel
+
+    local kbSimAccelTrack = Instance.new("Frame")
+    kbSimAccelTrack.Size = UDim2.new(1, -28, 0, 8)
+    kbSimAccelTrack.Position = UDim2.new(0, 14, 0, 706)
+    kbSimAccelTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+    kbSimAccelTrack.BorderSizePixel = 0
+    kbSimAccelTrack.ZIndex = KB_Z
+    kbSimAccelTrack.Parent = keybindPanel
+    createRounded(kbSimAccelTrack, 4)
+
+    local kbSimAccelFill = Instance.new("Frame")
+    kbSimAccelFill.BackgroundColor3 = Color3.fromRGB(200, 140, 0)
+    kbSimAccelFill.BorderSizePixel = 0
+    kbSimAccelFill.ZIndex = KB_Z
+    kbSimAccelFill.Parent = kbSimAccelTrack
+    createRounded(kbSimAccelFill, 4)
+
+    local kbSimAccelHandle = Instance.new("TextButton")
+    kbSimAccelHandle.Size = UDim2.new(0, 18, 0, 18)
+    kbSimAccelHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    kbSimAccelHandle.Text = ""
+    kbSimAccelHandle.BorderSizePixel = 0
+    kbSimAccelHandle.ZIndex = KB_Z + 1
+    kbSimAccelHandle.Parent = kbSimAccelTrack
+    createRounded(kbSimAccelHandle, 9)
+
+    local function updateSimAccelSlider()
+        local pct = (state.simAccel - SIM_ACCEL_MIN) / (SIM_ACCEL_MAX - SIM_ACCEL_MIN)
+        kbSimAccelFill.Size = UDim2.new(pct, 0, 1, 0)
+        kbSimAccelHandle.Position = UDim2.new(pct, -9, 0.5, -9)
+        kbSimAccelVal.Text = tostring(state.simAccel)
+    end
+    updateSimAccelSlider()
+
+    kbSimAccelHandle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then startDrag("accel") end
+    end)
+
+    UserInputService.InputChanged:Connect(function(inp)
+        if not draggingSimAccel then return end
+        if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        local tp = kbSimAccelTrack.AbsolutePosition
+        local ts = kbSimAccelTrack.AbsoluteSize
+        local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
+        state.simAccel = math.floor(SIM_ACCEL_MIN + pct * (SIM_ACCEL_MAX - SIM_ACCEL_MIN) + 0.5)
+        updateSimAccelSlider()
+    end)
+
+    -- ---- Toggle panel occupants vehicule ----
+    local kbOccSep = Instance.new("Frame")
+    kbOccSep.Size = UDim2.new(1, -28, 0, 1)
+    kbOccSep.Position = UDim2.new(0, 14, 0, 730)
+    kbOccSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
+    kbOccSep.BorderSizePixel = 0
+    kbOccSep.ZIndex = KB_Z
+    kbOccSep.Parent = keybindPanel
+
+    local kbOccBtn = Instance.new("TextButton")
+    kbOccBtn.Size = UDim2.new(1, -28, 0, 28)
+    kbOccBtn.Position = UDim2.new(0, 14, 0, 738)
+    kbOccBtn.TextSize = 13
+    kbOccBtn.Font = Enum.Font.GothamBold
+    kbOccBtn.BorderSizePixel = 0
+    kbOccBtn.ZIndex = KB_Z
+    kbOccBtn.Parent = keybindPanel
+    createRounded(kbOccBtn, 7)
+
+    local function updateOccBtn()
+        kbOccBtn.Text = state.occPanelEnabled and t("kb_occ_panel_on") or t("kb_occ_panel_off")
+        kbOccBtn.BackgroundColor3 = state.occPanelEnabled
+            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+        kbOccBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+    end
+    updateOccBtn()
+
+    kbOccBtn.MouseButton1Click:Connect(function()
+        state.occPanelEnabled = not state.occPanelEnabled
+        updateOccBtn()
+    end)
+
+    -- ===== PANNEAU OCCUPANTS VEHICLE (persistant, toujours visible, togglable) =====
+    local occPanel = Instance.new("Frame")
+    occPanel.Name = "OccupantsPanel"
+    occPanel.Size = UDim2.new(0, 210, 0, 14)
+    occPanel.Position = UDim2.new(0, 10, 0, 10)
+    occPanel.BackgroundColor3 = Color3.fromRGB(18, 22, 32)
+    occPanel.BorderSizePixel = 0
+    occPanel.Visible = false
+    occPanel.Parent = openGui
+    createRounded(occPanel, 10)
+
+    local occStroke = Instance.new("UIStroke")
+    occStroke.Color = Color3.fromRGB(200, 160, 40)
+    occStroke.Thickness = 1.5
+    occStroke.Parent = occPanel
+
+    local occIcon = Instance.new("TextLabel")
+    occIcon.Size = UDim2.new(0, 26, 0, 26)
+    occIcon.Position = UDim2.new(0, 6, 0, 6)
+    occIcon.BackgroundTransparency = 1
+    occIcon.TextColor3 = Color3.fromRGB(255, 200, 80)
+    occIcon.TextSize = 16
+    occIcon.Font = Enum.Font.GothamBold
+    occIcon.Text = "👥"
+    occIcon.Parent = occPanel
+
+    local occLines = {}
+    for i = 1, 6 do
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -42, 0, 16)
+        lbl.Position = UDim2.new(0, 36, 0, 4 + (i - 1) * 17)
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.fromRGB(230, 230, 230)
+        lbl.TextSize = 12
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.Text = ""
+        lbl.Visible = false
+        lbl.Parent = occPanel
+        occLines[i] = lbl
+    end
+
+    local function updateOccupantsPanel()
+        if not state.occPanelEnabled then
+            occPanel.Visible = false
+            return
+        end
+        local veh = findVehicle()
+        if not veh or not veh:IsA("Model") then
+            occPanel.Visible = false
+            return
+        end
+        local found = {}
+        for _, seat in ipairs(veh:GetDescendants()) do
+            if (seat:IsA("VehicleSeat") or seat:IsA("Seat")) and seat.Occupant then
+                local hum = seat.Occupant
+                local isDriver = seat:IsA("VehicleSeat")
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p.Character and p.Character:FindFirstChild("Humanoid") == hum then
+                        table.insert(found, { name = p.Name, seat = seat.Name, isDriver = isDriver })
+                        break
+                    end
+                end
+            end
+        end
+        table.sort(found, function(a, b) return (a.isDriver and 1 or 0) > (b.isDriver and 1 or 0) end)
+        if #found == 0 then
+            occPanel.Visible = false
+            return
+        end
+        for i = 1, 6 do
+            local occ = found[i]
+            if occ then
+                if occ.isDriver then
+                    occLines[i].Text = "🚗 CONDUCTEUR  " .. occ.name
+                    occLines[i].TextColor3 = Color3.fromRGB(255, 220, 60)
+                else
+                    occLines[i].Text = "👤  " .. occ.name
+                    occLines[i].TextColor3 = Color3.fromRGB(200, 200, 200)
+                end
+                occLines[i].Visible = true
+            else
+                occLines[i].Text = ""
+                occLines[i].Visible = false
+            end
+        end
+        local count = math.min(#found, 6)
+        occPanel.Size = UDim2.new(0, 210, 0, 10 + count * 17)
+        occPanel.Visible = true
+    end
+
+    task.spawn(function()
+        while openGui.Parent do
+            task.wait(0.5)
+            pcall(updateOccupantsPanel)
+        end
+    end)
+
+    -- ---- Badge role (persistant, au-dessus du bouton MOD) ----
+    local roleBadge = Instance.new("Frame")
+    roleBadge.Size = UDim2.new(0, 90, 0, 20)
+    roleBadge.Position = UDim2.new(0, 9, 0.5, -56)
+    roleBadge.BackgroundColor3 = Color3.fromRGB(40, 42, 52)
+    roleBadge.BorderSizePixel = 0
+    roleBadge.Parent = openGui
+    createRounded(roleBadge, 5)
+
+    local roleColorDot = Instance.new("Frame")
+    roleColorDot.Size = UDim2.new(0, 12, 0, 12)
+    roleColorDot.Position = UDim2.new(0, 4, 0.5, -6)
+    roleColorDot.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+    roleColorDot.BorderSizePixel = 0
+    roleColorDot.Parent = roleBadge
+    createRounded(roleColorDot, 6)
+
+    local roleBadgeLabel = Instance.new("TextLabel")
+    roleBadgeLabel.Size = UDim2.new(1, -22, 1, 0)
+    roleBadgeLabel.Position = UDim2.new(0, 20, 0, 0)
+    roleBadgeLabel.BackgroundTransparency = 1
+    roleBadgeLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    roleBadgeLabel.TextSize = 10
+    roleBadgeLabel.Font = Enum.Font.GothamBold
+    roleBadgeLabel.Text = "..."
+    roleBadgeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    roleBadgeLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    roleBadgeLabel.Parent = roleBadge
+
+    -- ---- Notif police (bas droite, persistante) ----
+    local policeNotifFrame = Instance.new("Frame")
+    policeNotifFrame.Size = UDim2.new(0, 210, 0, 50)
+    policeNotifFrame.Position = UDim2.new(1, -220, 1, -68)
+    policeNotifFrame.BackgroundColor3 = Color3.fromRGB(18, 20, 36)
+    policeNotifFrame.BorderSizePixel = 0
+    policeNotifFrame.Visible = false
+    policeNotifFrame.Parent = openGui
+    createRounded(policeNotifFrame, 10)
+
+    local policeAccent = Instance.new("Frame")
+    policeAccent.Size = UDim2.new(0, 4, 1, -10)
+    policeAccent.Position = UDim2.new(0, 5, 0, 5)
+    policeAccent.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+    policeAccent.BorderSizePixel = 0
+    policeAccent.Parent = policeNotifFrame
+    createRounded(policeAccent, 3)
+
+    local policeMainLabel = Instance.new("TextLabel")
+    policeMainLabel.Size = UDim2.new(1, -22, 0, 24)
+    policeMainLabel.Position = UDim2.new(0, 18, 0, 5)
+    policeMainLabel.BackgroundTransparency = 1
+    policeMainLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    policeMainLabel.TextSize = 13
+    policeMainLabel.Font = Enum.Font.GothamBold
+    policeMainLabel.TextXAlignment = Enum.TextXAlignment.Left
+    policeMainLabel.Text = t("notif_police_one")
+    policeMainLabel.Parent = policeNotifFrame
+
+    local policeSubLabel = Instance.new("TextLabel")
+    policeSubLabel.Size = UDim2.new(1, -22, 0, 16)
+    policeSubLabel.Position = UDim2.new(0, 18, 0, 28)
+    policeSubLabel.BackgroundTransparency = 1
+    policeSubLabel.TextColor3 = Color3.fromRGB(160, 160, 200)
+    policeSubLabel.TextSize = 11
+    policeSubLabel.Font = Enum.Font.Gotham
+    policeSubLabel.TextXAlignment = Enum.TextXAlignment.Left
+    policeSubLabel.Text = string.format(t("notif_police_sub"), 0)
+    policeSubLabel.Parent = policeNotifFrame
+
+    -- ---- Notif sim airborne ----
+    local simNotifFrame = Instance.new("Frame")
+    simNotifFrame.Size = UDim2.new(0, 210, 0, 50)
+    simNotifFrame.Position = UDim2.new(1, -220, 1, -126)
+    simNotifFrame.BackgroundColor3 = Color3.fromRGB(18, 20, 36)
+    simNotifFrame.BorderSizePixel = 0
+    simNotifFrame.Visible = false
+    simNotifFrame.Parent = openGui
+    createRounded(simNotifFrame, 10)
+
+    local simNotifAccent = Instance.new("Frame")
+    simNotifAccent.Size = UDim2.new(0, 4, 1, -10)
+    simNotifAccent.Position = UDim2.new(0, 5, 0, 5)
+    simNotifAccent.BackgroundColor3 = Color3.fromRGB(220, 130, 0)
+    simNotifAccent.BorderSizePixel = 0
+    simNotifAccent.Parent = simNotifFrame
+    createRounded(simNotifAccent, 3)
+
+    local simNotifMain = Instance.new("TextLabel")
+    simNotifMain.Size = UDim2.new(1, -22, 0, 24)
+    simNotifMain.Position = UDim2.new(0, 18, 0, 5)
+    simNotifMain.BackgroundTransparency = 1
+    simNotifMain.TextColor3 = Color3.fromRGB(255, 255, 255)
+    simNotifMain.TextSize = 13
+    simNotifMain.Font = Enum.Font.GothamBold
+    simNotifMain.TextXAlignment = Enum.TextXAlignment.Left
+    simNotifMain.Text = t("notif_airborne")
+    simNotifMain.Parent = simNotifFrame
+
+    local simNotifSub = Instance.new("TextLabel")
+    simNotifSub.Size = UDim2.new(1, -22, 0, 16)
+    simNotifSub.Position = UDim2.new(0, 18, 0, 28)
+    simNotifSub.BackgroundTransparency = 1
+    simNotifSub.TextColor3 = Color3.fromRGB(200, 160, 100)
+    simNotifSub.TextSize = 11
+    simNotifSub.Font = Enum.Font.Gotham
+    simNotifSub.TextXAlignment = Enum.TextXAlignment.Left
+    simNotifSub.Text = t("notif_airborne_sub")
+    simNotifSub.Parent = simNotifFrame
+
+    local simNotifTimer = 0
+    local simWasAirborne = false
+
+    RunService.Heartbeat:Connect(function(dt)
+        -- Detecter passage airborne pour afficher notif
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local seat = hum and hum.SeatPart
+        local vehModel = seat and seat:FindFirstAncestorOfClass("Model")
+        if state.vehSimEnabled and vehModel then
+            local airTime = vehAirTime[vehModel] or 0
+            local isAir = airTime >= 0.3
+            if isAir and not simWasAirborne then
+                simNotifFrame.Visible = true
+                simNotifTimer = 2.5
+            end
+            simWasAirborne = isAir
+        else
+            simWasAirborne = false
+        end
+        if simNotifTimer > 0 then
+            simNotifTimer = simNotifTimer - dt
+            if simNotifTimer <= 0 then
+                simNotifFrame.Visible = false
+            end
+        end
+    end)
+
+    -- ---- Boucle scan policier (0.5s) + mise a jour role ----
+    local POLICE_KW = {"police"}
+    local function matchesPolice(name)
+        local low = name:lower()
+        for _, kw in ipairs(POLICE_KW) do
+            if low:find(kw) then return true end
+        end
+        return false
+    end
+
+    local scanTimer = 0
+    RunService.Heartbeat:Connect(function(dt)
+        -- Badge role (chaque frame, léger)
+        if state.roleDisplayEnabled then
+            roleBadge.Visible = true
+            local team = player.Team
+            if team then
+                roleBadgeLabel.Text = team.Name
+                local ok, col = pcall(function() return team.TeamColor.Color end)
+                roleColorDot.BackgroundColor3 = ok and col or Color3.fromRGB(150, 150, 150)
+            else
+                local ok, role = pcall(function()
+                    return player:GetAttribute("role") or player:GetAttribute("Role")
+                end)
+                roleBadgeLabel.Text = (ok and role) and tostring(role) or "—"
+                roleColorDot.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+            end
+        else
+            roleBadge.Visible = false
+        end
+
+        -- Scan policier throttle 0.5s
+        scanTimer = scanTimer + dt
+        if scanTimer < 0.5 then return end
+        scanTimer = 0
+
+        if not state.policeNotifEnabled then
+            policeNotifFrame.Visible = false
+            return
+        end
+
+        local char = player.Character
+        if not char then policeNotifFrame.Visible = false return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then policeNotifFrame.Visible = false return end
+
+        local myPos = root.Position
+        local closestDist = math.huge
+        local copCount = 0
+
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then
+                local isPolic = false
+                if p.Team and matchesPolice(p.Team.Name) then isPolic = true end
+                if not isPolic then
+                    local ok, role = pcall(function()
+                        return p:GetAttribute("role") or p:GetAttribute("Role")
+                    end)
+                    if ok and role and matchesPolice(tostring(role)) then isPolic = true end
+                end
+                if isPolic then
+                    local pChar = p.Character
+                    if pChar then
+                        local pRoot = pChar:FindFirstChild("HumanoidRootPart")
+                        if pRoot then
+                            local dist = (myPos - pRoot.Position).Magnitude
+                            if dist <= state.policeDetectDist then
+                                copCount = copCount + 1
+                                if dist < closestDist then closestDist = dist end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if copCount > 0 then
+            policeNotifFrame.Visible = true
+            policeMainLabel.Text = copCount == 1
+                and t("notif_police_one")
+                or  string.format(t("notif_police_many"), copCount)
+            policeSubLabel.Text = string.format(t("notif_police_sub"), math.floor(closestDist))
+        else
+            policeNotifFrame.Visible = false
+        end
+    end)
 
     kbCloseBtn.MouseButton1Click:Connect(function()
         waitingForKey = false
@@ -4927,6 +8059,9 @@ end
 player.CharacterAdded:Connect(function()
     state.cachedVehicle = nil
     state.followEnabled = false
+    state.mirrorEnabled = false
+    state.mirrorTargetPart = nil
+    state.mirrorLastCFrame = nil
     stopTrollNoClipAndResolve()
 end)
 
