@@ -6671,193 +6671,128 @@ local function createMainUI()
                 stopAutoVole() return
             end
 
-            -- 3. Dossiers de cibles
-            local robFolder   = workspace:FindFirstChild("Robberies")
-            local vmFolder    = robFolder and robFolder:FindFirstChild("VendingMachines")
-            local jwRobbables = robFolder
-                and robFolder:FindFirstChild("Jeweler Robbery")
-                and robFolder:FindFirstChild("Jeweler Robbery"):FindFirstChild("Robbables")
+            -- 3. Trouver le dossier VendingMachines (optionnel, ok si absent)
+            local vmFolder = workspace:FindFirstChild("Robberies")
+            vmFolder = vmFolder and vmFolder:FindFirstChild("VendingMachines")
 
-            local doneMachines  = {}
-            local doneJewelry   = {}
+            local doneMachines = {}
 
-            -- Retourne la position centrale d'un modele de bijou
-            local function getJewelryPos(model)
-                local piv = model.PrimaryPart
-                if piv then return piv.Position end
-                local p = model:FindFirstChildWhichIsA("BasePart", true)
-                return p and p.Position or nil
-            end
-
-            -- Boucle principale : distributeurs + bijouterie
+            -- Boucle principale : distributeurs uniquement
             while autoVoleRunning do
                 local targets = {}
 
-                -- Distributeurs
                 if vmFolder then
                     for _, machine in ipairs(vmFolder:GetChildren()) do
                         if doneMachines[machine] then continue end
                         if isVendingMachineEmpty(machine) then
-                            doneMachines[machine] = true; continue
+                            doneMachines[machine] = true
+                            continue
                         end
-                        local r = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
-                        if r then table.insert(targets, {type="machine", machine=machine, root=r}) end
-                    end
-                end
-
-                -- Vitrines bijouterie (Broken=false => pas encore volee)
-                if jwRobbables then
-                    for _, model in ipairs(jwRobbables:GetChildren()) do
-                        if doneJewelry[model] then continue end
-                        if model:GetAttribute("Broken") == true then
-                            doneJewelry[model] = true; continue
+                        local machRoot = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
+                        if machRoot then
+                            table.insert(targets, {machine = machine, root = machRoot})
                         end
-                        local pos = getJewelryPos(model)
-                        if pos then table.insert(targets, {type="jewelry", model=model, pos=pos}) end
                     end
                 end
 
                 if #targets == 0 then break end
 
-                -- Cible la plus proche
+                -- Trouver le distributeur le plus proche
                 local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                 if not hrp then break end
                 local nearest, nearestDist = nil, math.huge
                 for _, tgt in ipairs(targets) do
-                    local p = tgt.type == "machine" and tgt.root.Position or tgt.pos
-                    local d = (hrp.Position - p).Magnitude
+                    local d = (hrp.Position - tgt.root.Position).Magnitude
                     if d < nearestDist then nearest = tgt; nearestDist = d end
                 end
                 if not nearest then break end
 
-                -- ── DISTRIBUTEUR ─────────────────────────────────────────────
-                if nearest.type == "machine" then
-                    local machine = nearest.machine
-                    local machRoot = nearest.root
+                local machine = nearest.machine
+                local machRoot = nearest.root
 
-                    if isCopNearby(machRoot.Position, 200) then task.wait(1); continue end
-
-                    statusLabel.Text = "Auto vole: conduite vers distributeur..."
-                    local driveTarget = getMachineFrontPos(machRoot, 7)
-                    microTeleport(driveTarget, statusLabel, {wallPass = true})
-                    waitTpDone()
-                    if not autoVoleRunning then break end
-
-                    dismountChar(); task.wait(0.4)
-
-                    local glassPart = machine:FindFirstChild("Glass")
-                    local walkTarget, facePos
-                    if glassPart then
-                        local outDir = Vector3.new(
-                            glassPart.Position.X - machRoot.Position.X, 0,
-                            glassPart.Position.Z - machRoot.Position.Z)
-                        outDir = outDir.Magnitude > 0.01 and outDir.Unit or machRoot.CFrame.LookVector
-                        walkTarget = glassPart.Position + outDir * 2
-                        facePos    = glassPart.Position
-                    else
-                        walkTarget = getMachineFrontPos(machRoot, 2.5)
-                        facePos    = machRoot.Position
-                    end
-
-                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp and (hrp.Position - machRoot.Position).Magnitude <= 20 then
-                        hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15)
-                    else
-                        microTeleport(walkTarget, statusLabel, {walkMode = true}); waitTpDone()
-                    end
-                    if not autoVoleRunning then break end
-                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15) end
-                    if not autoVoleRunning then break end
-
-                    statusLabel.Text = "Auto vole: tape distributeur..."
-                    local savedColors = highlightMachineRed(machine)
-                    local hitDeadline = tick() + 60
-                    local copStopped = false
-                    while autoVoleRunning and tick() < hitDeadline do
-                        if isVendingMachineEmpty(machine) then break end
-                        if isCopNearby(machRoot.Position, 60) then copStopped = true; break end
-                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos) end
-                        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game); task.wait(0.1)
-                        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game); task.wait(0.7)
-                    end
-                    restoreMachineColors(savedColors)
-
-                    if copStopped then
-                        if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
-                            mountVehicle(vehicle); task.wait(0.4)
-                        end
-                        continue
-                    end
-
-                    doneMachines[machine] = true
-                    task.wait(1.2)
-                    collectDropsNear(machRoot.Position, 80)
-
-                -- ── VITRINE BIJOUTERIE ────────────────────────────────────────
-                else
-                    local model   = nearest.model
-                    local jwPos   = nearest.pos
-                    local jwCenter = jwPos
-
-                    if isCopNearby(jwCenter, 200) then task.wait(1); continue end
-
-                    -- Conduire vers la vitrine
-                    statusLabel.Text = "Auto vole: bijouterie " .. model.Name .. "..."
-                    microTeleport(jwCenter + Vector3.new(0, 0, 3), statusLabel, {wallPass = true})
-                    waitTpDone()
-                    if not autoVoleRunning then break end
-
-                    dismountChar(); task.wait(0.4)
-
-                    -- Se placer devant la vitrine
-                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        hrp.CFrame = CFrame.new(jwCenter + Vector3.new(0, 1, 2), jwCenter)
-                        task.wait(0.15)
-                    end
-                    if not autoVoleRunning then break end
-
-                    -- Taper F jusqu'a ce que Broken = true
-                    statusLabel.Text = "Auto vole: casse vitrine " .. model.Name .. "..."
-                    local hitDeadline = tick() + 60
-                    local copStopped = false
-                    while autoVoleRunning and tick() < hitDeadline do
-                        if model:GetAttribute("Broken") == true then break end
-                        if isCopNearby(jwCenter, 60) then copStopped = true; break end
-                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp then hrp.CFrame = CFrame.new(jwCenter + Vector3.new(0, 1, 2), jwCenter) end
-                        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game); task.wait(0.1)
-                        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game); task.wait(0.7)
-                    end
-
-                    if copStopped then
-                        if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
-                            mountVehicle(vehicle); task.wait(0.4)
-                        end
-                        continue
-                    end
-
-                    -- Broken = true : appuyer E pour ramasser
-                    if autoVoleRunning and model:GetAttribute("Broken") == true then
-                        statusLabel.Text = "Auto vole: ramasse bijoux " .. model.Name .. "..."
-                        task.wait(0.3)
-                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp then hrp.CFrame = CFrame.new(jwCenter + Vector3.new(0, 1, 2), jwCenter) end
-                        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                        task.wait(3)
-                        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                        task.wait(0.3)
-                    end
-
-                    doneJewelry[model] = true
+                -- Cop a 200 studs -> re-evaluer au prochain tour
+                if isCopNearby(machRoot.Position, 200) then
+                    task.wait(1)
+                    continue
                 end
 
-                -- Remonter dans le vehicule apres chaque cible
+                -- Conduire devant la machine
+                statusLabel.Text = "Auto vole: conduite vers distributeur..."
+                local driveTarget = getMachineFrontPos(machRoot, 7)
+                microTeleport(driveTarget, statusLabel, {wallPass = true})
+                waitTpDone()
+                if not autoVoleRunning then break end
+
+                dismountChar()
+                task.wait(0.4)
+
+                -- Position devant le Glass
+                local glassPart = machine:FindFirstChild("Glass")
+                local walkTarget, facePos
+                if glassPart then
+                    local outDir = Vector3.new(
+                        glassPart.Position.X - machRoot.Position.X,
+                        0,
+                        glassPart.Position.Z - machRoot.Position.Z
+                    )
+                    outDir = outDir.Magnitude > 0.01 and outDir.Unit or machRoot.CFrame.LookVector
+                    walkTarget = glassPart.Position + outDir * 2
+                    facePos    = glassPart.Position
+                else
+                    walkTarget = getMachineFrontPos(machRoot, 2.5)
+                    facePos    = machRoot.Position
+                end
+
+                hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - machRoot.Position).Magnitude <= 20 then
+                    hrp.CFrame = CFrame.new(walkTarget, facePos)
+                    task.wait(0.15)
+                else
+                    microTeleport(walkTarget, statusLabel, {walkMode = true})
+                    waitTpDone()
+                end
+                if not autoVoleRunning then break end
+
+                hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15) end
+                if not autoVoleRunning then break end
+
+                -- Frappe de la machine
+                statusLabel.Text = "Auto vole: tape distributeur..."
+                local savedColors = highlightMachineRed(machine)
+                local hitDeadline = tick() + 60
+                local copStopped = false
+                while autoVoleRunning and tick() < hitDeadline do
+                    if isVendingMachineEmpty(machine) then break end
+                    if isCopNearby(machRoot.Position, 60) then
+                        copStopped = true; break
+                    end
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos) end
+                    VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+                    task.wait(0.1)
+                    VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+                    task.wait(0.7)
+                end
+                restoreMachineColors(savedColors)
+
+                if copStopped then
+                    if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
+                        mountVehicle(vehicle); task.wait(0.4)
+                    end
+                    continue
+                end
+
+                doneMachines[machine] = true
+                task.wait(1.2)
+
+                collectDropsNear(machRoot.Position, 80)
+
+                -- Remonter dans le vehicule apres chaque distributeur
                 if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
                     statusLabel.Text = "Auto vole: retour vehicule..."
-                    mountVehicle(vehicle); task.wait(0.4)
+                    mountVehicle(vehicle)
+                    task.wait(0.4)
                     if not isLocalPlayerSeatedInVehicle(vehicle) then
                         statusLabel.Text = "Auto vole: echec montee, arret"
                         stopAutoVole() return
