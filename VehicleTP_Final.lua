@@ -241,6 +241,8 @@ local TRANSLATIONS = {
         wp_del          = "SUP",
         wp_back_menu    = "RETOUR MENU",
         wp_import       = "IMPORT BRAQUAGES",
+        wp_show_list    = "📋 LISTE",
+        wp_list_title   = "Liste des waypoints",
         wp_live_fmt     = "Position live: %s",
         wp_live_unavail = "Position live: indisponible",
         wp_sel_fmt      = "Selection: %s | %s%s",
@@ -406,6 +408,8 @@ local TRANSLATIONS = {
         wp_del          = "DEL",
         wp_back_menu    = "BACK TO MENU",
         wp_import       = "IMPORT ROBBERIES",
+        wp_show_list    = "📋 LIST",
+        wp_list_title   = "Waypoints list",
         wp_live_fmt     = "Live position: %s",
         wp_live_unavail = "Live position: unavailable",
         wp_sel_fmt      = "Selected: %s | %s%s",
@@ -1342,6 +1346,48 @@ local function microTeleport(targetPos, statusLabel, options)
     local activeStuckBoost = walkMode and CONFIG.WALK_STUCK_CLIMB_BOOST or CONFIG.STUCK_CLIMB_BOOST
     local activeRecoverySide = walkMode and CONFIG.WALK_RECOVERY_SIDE_STEP or CONFIG.RECOVERY_SIDE_STEP
     local activeRecoveryUp = walkMode and CONFIG.WALK_RECOVERY_UP_STEP or CONFIG.RECOVERY_UP_STEP
+
+    -- Si walkMode et joueur pas assis dans le vehicule: deplacer le joueur (HumanoidRootPart)
+    -- et NON le vehicule. Evite que le vehicle se deplace a la place du personnage a pied.
+    if walkMode and not isLocalPlayerSeatedInVehicle(vehicle) then
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            state.isTPing = false
+            return false
+        end
+        local lastWalkPos = hrp.Position
+        local stuckWalkTime = 0
+        while state.isTPing do
+            local cur = hrp.Position
+            local delta = Vector3.new(targetPos.X - cur.X, 0, targetPos.Z - cur.Z)
+            local dist = delta.Magnitude
+            if dist < 1.5 then break end
+            local dt = RunService.Heartbeat:Wait()
+            -- Detecter si bloque: si le joueur n'a pas bouge de 0.05 stud en 0.6s -> TP direct
+            local moved = (cur - lastWalkPos).Magnitude
+            if moved < 0.05 then
+                stuckWalkTime = stuckWalkTime + dt
+                if stuckWalkTime >= 0.6 then
+                    hrp.CFrame = CFrame.new(
+                        Vector3.new(targetPos.X, cur.Y, targetPos.Z),
+                        Vector3.new(targetPos.X, cur.Y, targetPos.Z) + delta.Unit
+                    )
+                    break
+                end
+            else
+                stuckWalkTime = 0
+                lastWalkPos = cur
+            end
+            local step = math.min(dist, activeSpeed * dt)
+            local newPos = cur + delta.Unit * step
+            -- Orienter le personnage vers la cible
+            hrp.CFrame = CFrame.new(newPos, newPos + delta.Unit)
+        end
+        state.isTPing = false
+        return true
+    end
+
     local jumpCruiseY = nil
     local tpCollisionCache = wallPass and {} or nil
     local tpCharCollisionCache = (wallPass and not state.trollNoClipActive) and {} or nil
@@ -2377,11 +2423,12 @@ local function createDragBehavior(frame)
     end)
 end
 
-local function createSpeedSlider(parent, onChanged)
+local function createSpeedSlider(parent, onChanged, yOffset)
+    yOffset = yOffset ~= nil and yOffset or 46
     local row = Instance.new("Frame")
     row.Name = "SpeedRow"
-    row.Size = UDim2.new(1, -20, 0, 54)
-    row.Position = UDim2.new(0, 10, 0, 46)
+    row.Size = UDim2.new(1, -20, 0, 42)
+    row.Position = UDim2.new(0, 10, 0, yOffset)
     row.BackgroundTransparency = 1
     row.Parent = parent
 
@@ -3047,12 +3094,18 @@ local function createMainUI()
 
     local main = Instance.new("Frame")
     main.Name = "Main"
-    main.Size = UDim2.new(0, 760, 0, 640)
-    main.Position = UDim2.new(0.5, -380, 0.5, -320)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.Size = UDim2.new(0.95, 0, 0.9, 0)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
     main.BorderSizePixel = 0
     main.Parent = screenGui
     createRounded(main, 14)
+
+    -- Cap la taille max sur grand ecran (PC), laisse scale libre sur mobile
+    local sizeConstraint = Instance.new("UISizeConstraint")
+    sizeConstraint.MaxSize = Vector2.new(760, 640)
+    sizeConstraint.Parent = main
 
     local border = Instance.new("UIStroke")
     border.Color = Color3.fromRGB(0, 130, 200)
@@ -3062,29 +3115,32 @@ local function createMainUI()
     createDragBehavior(main)
 
     local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 72)
+    header.Size = UDim2.new(1, 0, 0, 40)
     header.BackgroundColor3 = Color3.fromRGB(24, 34, 52)
     header.BorderSizePixel = 0
     header.Parent = main
     createRounded(header, 14)
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -60, 1, 0)
-    title.Position = UDim2.new(0, 15, 0, 0)
+    title.Size = UDim2.new(1, -118, 1, 0)
+    title.Position = UDim2.new(0, 12, 0, 0)
     title.BackgroundTransparency = 1
     title.TextColor3 = Color3.fromRGB(80, 220, 255)
-    title.TextSize = 30
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Text = "ELIX MOD MENU"
+    title.TextScaled = true
+    local titleSizeConstraint = Instance.new("UITextSizeConstraint")
+    titleSizeConstraint.MaxTextSize = 18
+    titleSizeConstraint.Parent = title
     title.Parent = header
 
     local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 38, 0, 38)
-    closeBtn.Position = UDim2.new(1, -48, 0.5, -19)
+    closeBtn.Size = UDim2.new(0, 26, 0, 26)
+    closeBtn.Position = UDim2.new(1, -32, 0.5, -13)
     closeBtn.BackgroundColor3 = Color3.fromRGB(210, 70, 70)
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.TextSize = 22
+    closeBtn.TextScaled = true
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.Text = "X"
     closeBtn.BorderSizePixel = 0
@@ -3092,11 +3148,11 @@ local function createMainUI()
     createRounded(closeBtn, 8)
 
     local deleteBtn = Instance.new("TextButton")
-    deleteBtn.Size = UDim2.new(0, 52, 0, 38)
-    deleteBtn.Position = UDim2.new(1, -106, 0.5, -19)
+    deleteBtn.Size = UDim2.new(0, 32, 0, 26)
+    deleteBtn.Position = UDim2.new(1, -70, 0.5, -13)
     deleteBtn.BackgroundColor3 = Color3.fromRGB(145, 45, 45)
     deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    deleteBtn.TextSize = 12
+    deleteBtn.TextScaled = true
     deleteBtn.Font = Enum.Font.GothamBold
     deleteBtn.Text = "DEL"
     deleteBtn.BorderSizePixel = 0
@@ -3105,11 +3161,11 @@ local function createMainUI()
 
     -- Bouton langue FR / EN
     local langBtn = Instance.new("TextButton")
-    langBtn.Size = UDim2.new(0, 52, 0, 38)
-    langBtn.Position = UDim2.new(1, -164, 0.5, -19)
+    langBtn.Size = UDim2.new(0, 32, 0, 26)
+    langBtn.Position = UDim2.new(1, -108, 0.5, -13)
     langBtn.BackgroundColor3 = Color3.fromRGB(40, 60, 100)
     langBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    langBtn.TextSize = 13
+    langBtn.TextScaled = true
     langBtn.Font = Enum.Font.GothamBold
     langBtn.Text = "FR"
     langBtn.BorderSizePixel = 0
@@ -3126,23 +3182,36 @@ local function createMainUI()
     end)
 
     local content = Instance.new("Frame")
-    content.Size = UDim2.new(1, 0, 1, -72)
-    content.Position = UDim2.new(0, 0, 0, 72)
+    content.Size = UDim2.new(1, 0, 1, -40)
+    content.Position = UDim2.new(0, 0, 0, 40)
     content.BackgroundTransparency = 1
     content.Parent = main
 
-    local menuScreen = Instance.new("Frame")
+    local menuScreen = Instance.new("ScrollingFrame")
     menuScreen.Name = "Menu"
     menuScreen.Size = UDim2.new(1, 0, 1, 0)
     menuScreen.BackgroundTransparency = 1
+    menuScreen.ScrollBarThickness = 3
+    menuScreen.ScrollBarImageColor3 = Color3.fromRGB(0, 130, 200)
+    menuScreen.CanvasSize = UDim2.new(0, 0, 0, 0)
+    menuScreen.AutomaticCanvasSize = Enum.AutomaticSize.Y
     menuScreen.Parent = content
 
-    local menuLayout = Instance.new("UIListLayout")
-    menuLayout.FillDirection = Enum.FillDirection.Vertical
+    local menuLayout = Instance.new("UIGridLayout")
+    menuLayout.CellSize = UDim2.new(0.44, 0, 0.11, 0)
+    menuLayout.CellPadding = UDim2.new(0.02, 0, 0.01, 0)
     menuLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    menuLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    menuLayout.Padding = UDim.new(0, 16)
+    menuLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+    menuLayout.FillDirection = Enum.FillDirection.Horizontal
+    menuLayout.SortOrder = Enum.SortOrder.LayoutOrder
     menuLayout.Parent = menuScreen
+
+    local menuPadding = Instance.new("UIPadding")
+    menuPadding.PaddingTop = UDim.new(0, 12)
+    menuPadding.PaddingBottom = UDim.new(0, 12)
+    menuPadding.PaddingLeft = UDim.new(0.03, 0)
+    menuPadding.PaddingRight = UDim.new(0.03, 0)
+    menuPadding.Parent = menuScreen
 
     local teleportScreen = Instance.new("Frame")
     teleportScreen.Name = "Teleport"
@@ -3233,7 +3302,7 @@ local function createMainUI()
 
         -- ---- PANEL GAUCHE : liste pieces ----
         local leftPanel = Instance.new("Frame")
-        leftPanel.Size = UDim2.new(0, 240, 1, -58)
+        leftPanel.Size = UDim2.new(0, 240, 1, -84)
         leftPanel.Position = UDim2.new(0, 10, 0, 50)
         leftPanel.BackgroundColor3 = Color3.fromRGB(18, 22, 36)
         leftPanel.BorderSizePixel = 0
@@ -3279,12 +3348,13 @@ local function createMainUI()
 
         -- ---- PANEL DROIT : proprietes ----
         local rightPanel = Instance.new("Frame")
-        rightPanel.Size = UDim2.new(1, -270, 1, -58)
+        rightPanel.Size = UDim2.new(1, -270, 1, -84)
         rightPanel.Position = UDim2.new(0, 260, 0, 50)
         rightPanel.BackgroundColor3 = Color3.fromRGB(18, 22, 36)
         rightPanel.BorderSizePixel = 0
         rightPanel.Parent = customScreen
         createRounded(rightPanel, 10)
+
 
         local selectedLabel = Instance.new("TextLabel")
         selectedLabel.Size = UDim2.new(1, -16, 0, 28)
@@ -3807,26 +3877,27 @@ local function createMainUI()
     end -- do custom
 
     local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, -20, 0, 30)
-    statusLabel.Position = UDim2.new(0, 10, 1, -145)
+    statusLabel.Size = UDim2.new(1, -16, 0, 12)
+    statusLabel.Position = UDim2.new(0, 8, 0, 3)
     statusLabel.BackgroundTransparency = 1
     statusLabel.TextColor3 = Color3.fromRGB(120, 255, 190)
     statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.TextSize = 14
+    statusLabel.TextScaled = false
+    statusLabel.TextSize = 9
     statusLabel.Font = Enum.Font.GothamBold
     tReg(statusLabel, "status_ready")
-    statusLabel.Parent = teleportScreen
+    -- Parent sera defini apres la creation du controlPanel
 
     local selectedFollowLabel = Instance.new("TextLabel")
-    selectedFollowLabel.Size = UDim2.new(1, -20, 0, 22)
-    selectedFollowLabel.Position = UDim2.new(0, 10, 1, -166)
+    selectedFollowLabel.Size = UDim2.new(1, -16, 0, 11)
+    selectedFollowLabel.Position = UDim2.new(0, 8, 0, 17)
     selectedFollowLabel.BackgroundTransparency = 1
     selectedFollowLabel.TextColor3 = Color3.fromRGB(170, 210, 255)
     selectedFollowLabel.TextXAlignment = Enum.TextXAlignment.Left
-    selectedFollowLabel.TextSize = 13
-    selectedFollowLabel.Font = Enum.Font.GothamBold
+    selectedFollowLabel.TextSize = 9
+    selectedFollowLabel.Font = Enum.Font.Gotham
     tReg(selectedFollowLabel, "orbit_label")
-    selectedFollowLabel.Parent = teleportScreen
+    -- Parent sera defini apres la creation du controlPanel
 
     local categories = {
         { name = "BUILDING", key = "building" },
@@ -3842,26 +3913,31 @@ local function createMainUI()
     local knownDealers = {}
     local dealerRefreshBtn = nil
 
-    local tabsFrame = Instance.new("Frame")
-    tabsFrame.Size = UDim2.new(1, -20, 0, 50)
-    tabsFrame.Position = UDim2.new(0, 10, 0, 10)
+    local tabsFrame = Instance.new("ScrollingFrame")
+    tabsFrame.Size = UDim2.new(1, -20, 0, 36)
+    tabsFrame.Position = UDim2.new(0, 10, 0, 6)
     tabsFrame.BackgroundTransparency = 1
+    tabsFrame.ScrollBarThickness = 0
+    tabsFrame.ScrollingDirection = Enum.ScrollingDirection.X
+    tabsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    tabsFrame.AutomaticCanvasSize = Enum.AutomaticSize.X
+    tabsFrame.ClipsDescendants = true
     tabsFrame.Parent = teleportScreen
 
     local tabsLayout = Instance.new("UIListLayout")
     tabsLayout.FillDirection = Enum.FillDirection.Horizontal
     tabsLayout.Padding = UDim.new(0, 6)
-    tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     tabsLayout.Parent = tabsFrame
 
     for _, cat in ipairs(categories) do
         local tabBtn = Instance.new("TextButton")
         tabBtn.Name = cat.key .. "Tab"
-        tabBtn.Size = UDim2.new(0, 132, 0, 36)
+        tabBtn.Size = UDim2.new(0, 110, 0, 30)
         tabBtn.BackgroundColor3 = Color3.fromRGB(38, 52, 82)
         tabBtn.TextColor3 = Color3.fromRGB(150, 160, 180)
-        tabBtn.TextSize = 12
+        tabBtn.TextSize = 11
         tabBtn.Font = Enum.Font.GothamBold
         tReg(tabBtn, "tab_" .. cat.key)
         tabBtn.BorderSizePixel = 0
@@ -3872,8 +3948,8 @@ local function createMainUI()
 
         local scrollFrame = Instance.new("ScrollingFrame")
         scrollFrame.Name = cat.key .. "Content"
-        scrollFrame.Size = UDim2.new(1, -20, 1, -220)
-        scrollFrame.Position = UDim2.new(0, 10, 0, 70)
+        scrollFrame.Size = UDim2.new(1, -20, 1, -164)
+        scrollFrame.Position = UDim2.new(0, 10, 0, 50)
         scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
         scrollFrame.BorderSizePixel = 0
         scrollFrame.ScrollBarThickness = 6
@@ -3884,7 +3960,7 @@ local function createMainUI()
 
         local gridLayout = Instance.new("UIGridLayout")
         gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
-        gridLayout.CellSize = UDim2.new(0.5, -8, 0, cat.key == "dealer" and 92 or 66)
+        gridLayout.CellSize = UDim2.new(0.5, -8, 0, cat.key == "dealer" and 68 or 60)
         gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
         gridLayout.VerticalAlignment = Enum.VerticalAlignment.Top
         gridLayout.Parent = scrollFrame
@@ -3907,6 +3983,18 @@ local function createMainUI()
                 refreshVehiclesTab()
             elseif cat.key == "players" then
                 refreshPlayersTab()
+            elseif cat.key == "dealer" then
+                if tabContents["dealer"] then
+                    for _, child in ipairs(tabContents["dealer"]:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            local label = child:FindFirstChildWhichIsA("TextLabel")
+                            local displayName = (label and label.Text or child.Text):lower()
+                            if displayName:find("conces", 1, true) then
+                                child:Destroy()
+                            end
+                        end
+                    end
+                end
             end
             if dealerRefreshBtn then
                 dealerRefreshBtn.Visible = (cat.key == "dealer")
@@ -3921,7 +4009,7 @@ local function createMainUI()
     do
         local rb = Instance.new("TextButton")
         rb.Size = UDim2.new(1, -20, 0, 26)
-        rb.Position = UDim2.new(0, 10, 0, 70)
+        rb.Position = UDim2.new(0, 10, 0, 50)
         rb.BackgroundColor3 = Color3.fromRGB(30, 70, 40)
         rb.TextColor3 = Color3.fromRGB(160, 255, 190)
         rb.TextSize = 12
@@ -3935,8 +4023,8 @@ local function createMainUI()
 
         -- Decaler le scrollFrame dealer pour laisser la place
         if tabContents["dealer"] then
-            tabContents["dealer"].Position = UDim2.new(0, 10, 0, 100)
-            tabContents["dealer"].Size = UDim2.new(1, -20, 1, -250)
+            tabContents["dealer"].Position = UDim2.new(0, 10, 0, 82)
+            tabContents["dealer"].Size = UDim2.new(1, -20, 1, -196)
         end
     end
 
@@ -3953,73 +4041,65 @@ local function createMainUI()
     end
 
     local controlPanel = Instance.new("Frame")
-    controlPanel.Size = UDim2.new(1, -20, 0, 100)
-    controlPanel.Position = UDim2.new(0, 10, 1, -110)
+    controlPanel.Size = UDim2.new(1, -20, 0, 108)
+    controlPanel.Position = UDim2.new(0, 10, 1, -114)
     controlPanel.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
     controlPanel.BorderSizePixel = 0
     controlPanel.Parent = teleportScreen
     createRounded(controlPanel, 10)
 
-    createSpeedSlider(controlPanel)
+    -- Labels dans le panel (pas en dehors)
+    statusLabel.Parent = controlPanel
+    selectedFollowLabel.Parent = controlPanel
 
-    local backBtn = Instance.new("TextButton")
-    backBtn.Size = UDim2.new(0, 120, 0, 34)
-    backBtn.Position = UDim2.new(0, 10, 0, 8)
-    backBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    backBtn.TextSize = 13
-    backBtn.Font = Enum.Font.GothamBold
-    tReg(backBtn, "btn_back")
-    backBtn.BorderSizePixel = 0
-    backBtn.Parent = controlPanel
-    createRounded(backBtn, 8)
+    createSpeedSlider(controlPanel, nil, 62)
 
-    local cancelBtn = Instance.new("TextButton")
-    cancelBtn.Size = UDim2.new(0, 120, 0, 34)
-    cancelBtn.Position = UDim2.new(0, 140, 0, 8)
-    cancelBtn.BackgroundColor3 = Color3.fromRGB(210, 70, 70)
-    cancelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    cancelBtn.TextSize = 13
-    cancelBtn.Font = Enum.Font.GothamBold
-    tReg(cancelBtn, "btn_cancel")
-    cancelBtn.BorderSizePixel = 0
-    cancelBtn.Parent = controlPanel
-    createRounded(cancelBtn, 8)
+    -- Scroll horizontal pour les boutons de controle (evite le debordement sur mobile)
+    local btnScroll = Instance.new("ScrollingFrame")
+    btnScroll.Size = UDim2.new(1, -10, 0, 28)
+    btnScroll.Position = UDim2.new(0, 5, 0, 32)
+    btnScroll.BackgroundTransparency = 1
+    btnScroll.ScrollBarThickness = 0
+    btnScroll.ScrollingDirection = Enum.ScrollingDirection.X
+    btnScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    btnScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+    btnScroll.ClipsDescendants = true
+    btnScroll.Parent = controlPanel
 
-    local followBtn = Instance.new("TextButton")
-    followBtn.Size = UDim2.new(0, 100, 0, 34)
-    followBtn.Position = UDim2.new(0, 270, 0, 8)
-    followBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-    followBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    followBtn.TextSize = 13
-    followBtn.Font = Enum.Font.GothamBold
-    tReg(followBtn, "btn_orbit_off")
-    followBtn.BorderSizePixel = 0
-    followBtn.Parent = controlPanel
-    createRounded(followBtn, 8)
+    local btnLayout = Instance.new("UIListLayout")
+    btnLayout.FillDirection = Enum.FillDirection.Horizontal
+    btnLayout.Padding = UDim.new(0, 6)
+    btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    btnLayout.Parent = btnScroll
 
-    local rotationBtn = Instance.new("TextButton")
-    rotationBtn.Size = UDim2.new(0, 100, 0, 34)
-    rotationBtn.Position = UDim2.new(0, 375, 0, 8)
-    rotationBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-    rotationBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    rotationBtn.TextSize = 12
-    rotationBtn.Font = Enum.Font.GothamBold
-    tReg(rotationBtn, "btn_rot_off")
-    rotationBtn.BorderSizePixel = 0
-    rotationBtn.Parent = controlPanel
-    createRounded(rotationBtn, 8)
+    local function makeCtrlBtn(labelKey, w, color)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, w, 0, 28)
+        b.BackgroundColor3 = color
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.TextScaled = true
+        b.Font = Enum.Font.GothamBold
+        b.BorderSizePixel = 0
+        b.Parent = btnScroll
+        createRounded(b, 8)
+        if labelKey then tReg(b, labelKey) end
+        return b
+    end
+
+    local backBtn   = makeCtrlBtn("btn_back",        80, Color3.fromRGB(100, 100, 100))
+    local cancelBtn = makeCtrlBtn("btn_cancel",      88, Color3.fromRGB(210, 70, 70))
+    local followBtn = makeCtrlBtn("btn_orbit_off",   72, Color3.fromRGB(90, 90, 90))
+    local rotationBtn = makeCtrlBtn("btn_rot_off",   72, Color3.fromRGB(90, 90, 90))
 
     local horseBtn = Instance.new("TextButton")
-    horseBtn.Size = UDim2.new(0, 110, 0, 34)
-    horseBtn.Position = UDim2.new(0, 480, 0, 8)
+    horseBtn.Size = UDim2.new(0, 76, 0, 28)
     horseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     horseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    horseBtn.TextSize = 12
+    horseBtn.TextScaled = true
     horseBtn.Font = Enum.Font.GothamBold
     horseBtn.Text = t("btn_horse_off")
     horseBtn.BorderSizePixel = 0
-    horseBtn.Parent = controlPanel
+    horseBtn.Parent = btnScroll
     createRounded(horseBtn, 8)
 
     horseBtn.MouseButton1Click:Connect(function()
@@ -4035,17 +4115,7 @@ local function createMainUI()
         end
     end)
 
-    local mirrorBtn = Instance.new("TextButton")
-    mirrorBtn.Size = UDim2.new(0, 100, 0, 34)
-    mirrorBtn.Position = UDim2.new(0, 595, 0, 8)
-    mirrorBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    mirrorBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    mirrorBtn.TextSize = 11
-    mirrorBtn.Font = Enum.Font.GothamBold
-    tReg(mirrorBtn, "btn_mirror_off")
-    mirrorBtn.BorderSizePixel = 0
-    mirrorBtn.Parent = controlPanel
-    createRounded(mirrorBtn, 8)
+    local mirrorBtn = makeCtrlBtn("btn_mirror_off", 72, Color3.fromRGB(80, 80, 80))
 
 
     local function refreshModeButtons()
@@ -4066,20 +4136,22 @@ local function createMainUI()
         selectedFollowLabel.Text = (state.lang == "en" and "Orbit target: " or "Cible orbit: ") .. targetName .. " | " .. mode
     end
 
+    local isMobile = UserInputService.TouchEnabled
+
     local waypointTitle = Instance.new("TextLabel")
-    waypointTitle.Size = UDim2.new(1, -20, 0, 34)
-    waypointTitle.Position = UDim2.new(0, 10, 0, 10)
+    waypointTitle.Size = UDim2.new(1, -20, 0, isMobile and 22 or 34)
+    waypointTitle.Position = UDim2.new(0, 10, 0, 6)
     waypointTitle.BackgroundTransparency = 1
     waypointTitle.TextColor3 = Color3.fromRGB(80, 220, 255)
     waypointTitle.TextXAlignment = Enum.TextXAlignment.Left
-    waypointTitle.TextSize = 24
+    waypointTitle.TextSize = isMobile and 16 or 24
     waypointTitle.Font = Enum.Font.GothamBold
     tReg(waypointTitle, "wp_title")
     waypointTitle.Parent = waypointScreen
 
     local waypointHint = Instance.new("TextLabel")
-    waypointHint.Size = UDim2.new(1, -20, 0, 20)
-    waypointHint.Position = UDim2.new(0, 10, 0, 44)
+    waypointHint.Size = UDim2.new(1, -20, 0, isMobile and 14 or 20)
+    waypointHint.Position = UDim2.new(0, 10, 0, isMobile and 30 or 44)
     waypointHint.BackgroundTransparency = 1
     waypointHint.TextColor3 = Color3.fromRGB(155, 185, 220)
     waypointHint.TextXAlignment = Enum.TextXAlignment.Left
@@ -4089,8 +4161,8 @@ local function createMainUI()
     waypointHint.Parent = waypointScreen
 
     local livePosLabel = Instance.new("TextLabel")
-    livePosLabel.Size = UDim2.new(1, -20, 0, 20)
-    livePosLabel.Position = UDim2.new(0, 10, 0, 72)
+    livePosLabel.Size = UDim2.new(1, -20, 0, 18)
+    livePosLabel.Position = UDim2.new(0, 10, 0, isMobile and 46 or 72)
     livePosLabel.BackgroundTransparency = 1
     livePosLabel.TextColor3 = Color3.fromRGB(120, 255, 190)
     livePosLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -4100,8 +4172,8 @@ local function createMainUI()
     livePosLabel.Parent = waypointScreen
 
     local selectedWaypointLabel = Instance.new("TextLabel")
-    selectedWaypointLabel.Size = UDim2.new(1, -20, 0, 20)
-    selectedWaypointLabel.Position = UDim2.new(0, 10, 0, 94)
+    selectedWaypointLabel.Size = UDim2.new(1, -20, 0, 18)
+    selectedWaypointLabel.Position = UDim2.new(0, 10, 0, isMobile and 66 or 94)
     selectedWaypointLabel.BackgroundTransparency = 1
     selectedWaypointLabel.TextColor3 = Color3.fromRGB(170, 210, 255)
     selectedWaypointLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -4112,7 +4184,7 @@ local function createMainUI()
 
     local waypointControl = Instance.new("Frame")
     waypointControl.Size = UDim2.new(1, -20, 0, 112)
-    waypointControl.Position = UDim2.new(0, 10, 0, 120)
+    waypointControl.Position = UDim2.new(0, 10, 0, isMobile and 88 or 120)
     waypointControl.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
     waypointControl.BorderSizePixel = 0
     waypointControl.Parent = waypointScreen
@@ -4241,14 +4313,63 @@ local function createMainUI()
     exportBox.Parent = exportFrame
     createRounded(exportBox, 8)
 
+    -- Overlay popup pour la liste des waypoints
+    local wpListOverlay = Instance.new("Frame")
+    wpListOverlay.Size = UDim2.new(1, 0, 1, 0)
+    wpListOverlay.BackgroundColor3 = Color3.fromRGB(0, 5, 15)
+    wpListOverlay.BackgroundTransparency = 0.35
+    wpListOverlay.BorderSizePixel = 0
+    wpListOverlay.ZIndex = 20
+    wpListOverlay.Visible = false
+    wpListOverlay.Parent = waypointScreen
+
+    local wpListPanel = Instance.new("Frame")
+    wpListPanel.Size = UDim2.new(0.92, 0, 0.85, 0)
+    wpListPanel.AnchorPoint = Vector2.new(0.5, 0.5)
+    wpListPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+    wpListPanel.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
+    wpListPanel.BorderSizePixel = 0
+    wpListPanel.ZIndex = 21
+    wpListPanel.Parent = wpListOverlay
+    createRounded(wpListPanel, 12)
+
+    local wpListPanelTitle = Instance.new("TextLabel")
+    wpListPanelTitle.Size = UDim2.new(1, -50, 0, 36)
+    wpListPanelTitle.Position = UDim2.new(0, 12, 0, 4)
+    wpListPanelTitle.BackgroundTransparency = 1
+    wpListPanelTitle.TextColor3 = Color3.fromRGB(80, 220, 255)
+    wpListPanelTitle.TextXAlignment = Enum.TextXAlignment.Left
+    wpListPanelTitle.TextSize = 15
+    wpListPanelTitle.Font = Enum.Font.GothamBold
+    wpListPanelTitle.ZIndex = 22
+    tReg(wpListPanelTitle, "wp_list_title")
+    wpListPanelTitle.Parent = wpListPanel
+
+    local wpListCloseBtn = Instance.new("TextButton")
+    wpListCloseBtn.Size = UDim2.new(0, 30, 0, 30)
+    wpListCloseBtn.Position = UDim2.new(1, -38, 0, 7)
+    wpListCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    wpListCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    wpListCloseBtn.TextScaled = true
+    wpListCloseBtn.Font = Enum.Font.GothamBold
+    wpListCloseBtn.Text = "✕"
+    wpListCloseBtn.BorderSizePixel = 0
+    wpListCloseBtn.ZIndex = 22
+    wpListCloseBtn.Parent = wpListPanel
+    createRounded(wpListCloseBtn, 6)
+    wpListCloseBtn.MouseButton1Click:Connect(function()
+        wpListOverlay.Visible = false
+    end)
+
     local waypointList = Instance.new("ScrollingFrame")
-    waypointList.Size = UDim2.new(1, -20, 1, -408)
-    waypointList.Position = UDim2.new(0, 10, 0, 356)
+    waypointList.Size = UDim2.new(1, -16, 1, -50)
+    waypointList.Position = UDim2.new(0, 8, 0, 44)
     waypointList.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
     waypointList.BorderSizePixel = 0
     waypointList.ScrollBarThickness = 6
     waypointList.CanvasSize = UDim2.new(0, 0, 0, 0)
-    waypointList.Parent = waypointScreen
+    waypointList.ZIndex = 22
+    waypointList.Parent = wpListPanel
     createRounded(waypointList, 10)
 
     local waypointLayout = Instance.new("UIListLayout")
@@ -4274,8 +4395,8 @@ local function createMainUI()
     createRounded(waypointBackBtn, 8)
 
     local importRobberyBtn = Instance.new("TextButton")
-    importRobberyBtn.Size = UDim2.new(0, 190, 0, 36)
-    importRobberyBtn.Position = UDim2.new(1, -200, 1, -42)
+    importRobberyBtn.Size = UDim2.new(0, 160, 0, 36)
+    importRobberyBtn.Position = UDim2.new(1, -170, 1, -42)
     importRobberyBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 180)
     importRobberyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     importRobberyBtn.TextSize = 13
@@ -4284,6 +4405,33 @@ local function createMainUI()
     importRobberyBtn.BorderSizePixel = 0
     importRobberyBtn.Parent = waypointScreen
     createRounded(importRobberyBtn, 8)
+
+    local wpListBtn = Instance.new("TextButton")
+    wpListBtn.Size = UDim2.new(0, 130, 0, 36)
+    wpListBtn.Position = UDim2.new(0.5, -65, 1, -42)
+    wpListBtn.BackgroundColor3 = Color3.fromRGB(80, 50, 130)
+    wpListBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    wpListBtn.TextSize = 13
+    wpListBtn.Font = Enum.Font.GothamBold
+    tReg(wpListBtn, "wp_show_list")
+    wpListBtn.BorderSizePixel = 0
+    wpListBtn.Parent = waypointScreen
+    createRounded(wpListBtn, 8)
+    wpListBtn.MouseButton1Click:Connect(function()
+        wpListOverlay.Visible = not wpListOverlay.Visible
+    end)
+
+    do -- Slider vitesse waypoints
+        local spH = isMobile and 50 or 62
+        local sp = Instance.new("Frame")
+        sp.Size = UDim2.new(1, -20, 0, spH)
+        sp.Position = UDim2.new(0, 10, 1, -(spH + 50))
+        sp.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
+        sp.BorderSizePixel = 0
+        sp.Parent = waypointScreen
+        createRounded(sp, 10)
+        createSpeedSlider(sp, nil, 4)
+    end
 
     local function formatWaypointPos(pos)
         return string.format("X:%.1f Y:%.1f Z:%.1f", pos.X, pos.Y, pos.Z)
@@ -4405,6 +4553,7 @@ local function createMainUI()
             emptyLabel.TextSize = 13
             emptyLabel.Font = Enum.Font.Gotham
             emptyLabel.Text = "Aucun waypoint, cree ton premier point."
+            emptyLabel.ZIndex = 23
             emptyLabel.Parent = waypointList
             return
         end
@@ -4417,6 +4566,7 @@ local function createMainUI()
             row.Size = UDim2.new(1, -14, 0, 72)
             row.BackgroundColor3 = selected and Color3.fromRGB(33, 78, 108) or Color3.fromRGB(35, 45, 70)
             row.BorderSizePixel = 0
+            row.ZIndex = 23
             row.Parent = waypointList
             createRounded(row, 8)
 
@@ -4429,6 +4579,7 @@ local function createMainUI()
             nameLabel.Font = Enum.Font.GothamBold
             nameLabel.TextXAlignment = Enum.TextXAlignment.Left
             nameLabel.Text = string.format("%d. %s", index, waypoint.name)
+            nameLabel.ZIndex = 24
             nameLabel.Parent = row
 
             local posLabel = Instance.new("TextLabel")
@@ -4440,6 +4591,7 @@ local function createMainUI()
             posLabel.Font = Enum.Font.Gotham
             posLabel.TextXAlignment = Enum.TextXAlignment.Left
             posLabel.Text = formatWaypointPos(waypoint.pos)
+            posLabel.ZIndex = 24
             posLabel.Parent = row
 
             local selectBtn = Instance.new("TextButton")
@@ -4451,6 +4603,7 @@ local function createMainUI()
             selectBtn.Font = Enum.Font.GothamBold
             selectBtn.Text = "SEL"
             selectBtn.BorderSizePixel = 0
+            selectBtn.ZIndex = 24
             selectBtn.Parent = row
             createRounded(selectBtn, 7)
 
@@ -4463,6 +4616,7 @@ local function createMainUI()
             tpBtnRow.Font = Enum.Font.GothamBold
             tpBtnRow.Text = "TP"
             tpBtnRow.BorderSizePixel = 0
+            tpBtnRow.ZIndex = 24
             tpBtnRow.Parent = row
             createRounded(tpBtnRow, 7)
 
@@ -4475,6 +4629,7 @@ local function createMainUI()
             delBtnRow.Font = Enum.Font.GothamBold
             delBtnRow.Text = "DEL"
             delBtnRow.BorderSizePixel = 0
+            delBtnRow.ZIndex = 24
             delBtnRow.Parent = row
             createRounded(delBtnRow, 7)
 
@@ -4607,6 +4762,10 @@ local function createMainUI()
         { nameKey = "dest_prison",   pos = Vector3.new( -604.927,  9.833, 3051.886), color = 2 },
         { nameKey = "dest_garage",   pos = Vector3.new(-1441.704,  5.339,  138.320), color = 3 },
         { nameKey = "dest_conces",   pos = Vector3.new(-1404.890,  5.613,  991.290), color = 3 },
+        -- Stations service (noms des fichiers workspace)
+        { name = "Gas-N-Go Fuel Station", pos = Vector3.new(-1526.775, 5.803, 3762.394), color = 4 },
+        { name = "Tool Shop",             pos = Vector3.new( -755.969, 5.601,  630.530), color = 4 },
+        { name = "Osso Fuel Station",     pos = Vector3.new(  -79.882, 5.293, -777.411), color = 4 },
     }
 
     importRobberyBtn.MouseButton1Click:Connect(function()
@@ -4639,28 +4798,40 @@ local function createMainUI()
         showScreen("menu")
     end)
 
-    local function makeMenuButton(text, color, callback)
+    local function makeMenuButton(text, color, callback, icon)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 360, 0, 58)
+        btn.Size = UDim2.new(1, 0, 1, 0) -- UIGridLayout controle la taille reelle
         btn.BackgroundColor3 = color
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.TextSize = 17
+        btn.TextScaled = true
         btn.Font = Enum.Font.GothamBold
-        btn.Text = text
+        btn.Text = (icon and (icon .. "  ") or "") .. text
         btn.BorderSizePixel = 0
         btn.Parent = menuScreen
         createRounded(btn, 10)
 
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(
+            math.clamp(color.R * 255 + 60, 0, 255),
+            math.clamp(color.G * 255 + 60, 0, 255),
+            math.clamp(color.B * 255 + 60, 0, 255)
+        )
+        stroke.Thickness = 1.5
+        stroke.Transparency = 0.6
+        stroke.Parent = btn
+
         btn.MouseEnter:Connect(function()
             btn.BackgroundColor3 = Color3.fromRGB(
-                math.clamp(color.R * 255 + 20, 0, 255),
-                math.clamp(color.G * 255 + 20, 0, 255),
-                math.clamp(color.B * 255 + 20, 0, 255)
+                math.clamp(color.R * 255 + 25, 0, 255),
+                math.clamp(color.G * 255 + 25, 0, 255),
+                math.clamp(color.B * 255 + 25, 0, 255)
             )
+            stroke.Transparency = 0
         end)
 
         btn.MouseLeave:Connect(function()
             btn.BackgroundColor3 = color
+            stroke.Transparency = 0.6
         end)
 
         btn.MouseButton1Click:Connect(callback)
@@ -4668,18 +4839,25 @@ local function createMainUI()
     end
 
     local function addDestinationButton(tabKey, text, color, getTargetPosition, pingModel)
+        if tabKey == "dealer" then
+            local tl = text:lower()
+            if tl:find("conces", 1, true) or tl:find("dealership", 1, true) or tl:find("car deal", 1, true) then
+                return
+            end
+        end
         local parent = tabContents[tabKey]
         if not parent then
             return
         end
 
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 66)
+        btn.Size = UDim2.new(1, 0, 0, 60)
         btn.BackgroundColor3 = color
         btn.TextColor3 = Color3.fromRGB(230, 245, 255)
         btn.TextSize = 13
         btn.Font = Enum.Font.GothamBold
         btn.BorderSizePixel = 0
+        btn.ClipsDescendants = true
         btn.Parent = parent
         createRounded(btn, 8)
 
@@ -4802,7 +4980,7 @@ local function createMainUI()
         -- Bouton TP instant (visible seulement si <= 50 studs)
         local instantBtn = Instance.new("TextButton")
         instantBtn.Size = UDim2.new(1, 0, 0, 24)
-        instantBtn.Position = UDim2.new(0, 0, 0, 66)
+        instantBtn.Position = UDim2.new(0, 0, 0, 36)
         instantBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 90)
         instantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         instantBtn.TextSize = 12
@@ -4852,7 +5030,7 @@ local function createMainUI()
         -- Bouton TP TOIT (visible a <= 25 studs)
         local roofBtn = Instance.new("TextButton")
         roofBtn.Size = UDim2.new(0.5, -1, 0, 24)
-        roofBtn.Position = UDim2.new(0.5, 1, 0, 66)
+        roofBtn.Position = UDim2.new(0.5, 1, 0, 36)
         roofBtn.BackgroundColor3 = Color3.fromRGB(200, 110, 0)
         roofBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         roofBtn.TextSize = 12
@@ -4878,7 +5056,7 @@ local function createMainUI()
 
         -- Ajuster instant a moitie du bouton
         instantBtn.Size = UDim2.new(0.5, -1, 0, 24)
-        instantBtn.Position = UDim2.new(0, 0, 0, 66)
+        instantBtn.Position = UDim2.new(0, 0, 0, 36)
 
         roofBtn.MouseButton1Click:Connect(function()
             local result = getTargetPosition()
@@ -4943,7 +5121,7 @@ local function createMainUI()
 
     local function categorize(name)
         local n = name:lower()
-        if n:find("dealer") or n:find("drug") then
+        if (n:find("dealer") or n:find("drug")) and not n:find("conces") and not n:find("dealership") and not n:find("car deal") then
             return "dealer"
         end
         return "building"
@@ -4993,6 +5171,7 @@ local function createMainUI()
             [1] = Color3.fromRGB(125, 65,  65),  -- braquage: rouge
             [2] = Color3.fromRGB(160, 90,  30),  -- prison: orange
             [3] = Color3.fromRGB( 40, 80, 140),  -- divers: bleu
+            [4] = Color3.fromRGB( 30, 110,  55),  -- station service: vert
         }
         local btnIndex = 0
 
@@ -5002,7 +5181,7 @@ local function createMainUI()
             local captured = preset
             local idx = btnIndex
             local btn = addDestinationButton("robbery", "", color, function()
-                local name = t(captured.nameKey)
+                local name = captured.name or t(captured.nameKey or "dest_banque")
                 return {
                     pos = captured.pos,
                     statusText = string.format(
@@ -5013,14 +5192,15 @@ local function createMainUI()
                 }
             end)
             if btn then
-                -- Enregistre le bouton pour mise a jour dynamique via tReg personnalise
                 local function updatePresetBtnText()
-                    local name = t(captured.nameKey)
+                    local name = captured.name or t(captured.nameKey or "dest_banque")
                     btn.Text = string.format("%d. %s | X:%.0f Y:%.0f Z:%.0f",
                         idx, name, captured.pos.X, captured.pos.Y, captured.pos.Z)
                 end
                 updatePresetBtnText()
-                table.insert(langLabels, { inst = nil, key = captured.nameKey, updateFn = updatePresetBtnText })
+                if captured.nameKey then
+                    table.insert(langLabels, { inst = nil, key = captured.nameKey, updateFn = updatePresetBtnText })
+                end
             end
         end
     end
@@ -5058,12 +5238,21 @@ local function createMainUI()
 
         local addedCount = 0
 
+        local EXCLUDED_DEALERS = {"concessionnaire", "conces", "truck", "camion"}
+        local function isExcluded(name)
+            local n = name:lower()
+            for _, word in ipairs(EXCLUDED_DEALERS) do
+                if n:find(word, 1, true) then return true end
+            end
+            return false
+        end
+
         -- Passe 1 : modeles avec Humanoid
         local foundWithHumanoid = false
         for _, dealer in ipairs(dealersFolder:GetDescendants()) do
             if dealer:IsA("Model") and dealer:FindFirstChildOfClass("Humanoid") then
                 foundWithHumanoid = true
-                if not knownDealers[dealer] and not dealer.Name:lower():find("conces") then
+                if not knownDealers[dealer] and not isExcluded(dealer.Name) then
                     knownDealers[dealer] = true
                     local captured = dealer
                     local lastKnownPos = nil
@@ -5086,7 +5275,7 @@ local function createMainUI()
         -- Passe 2 (fallback) : si aucun Humanoid trouve, prendre tous les modeles
         if not foundWithHumanoid then
             for _, dealer in ipairs(dealersFolder:GetChildren()) do
-                if dealer:IsA("Model") and not knownDealers[dealer] and not dealer.Name:lower():find("conces") then
+                if dealer:IsA("Model") and not knownDealers[dealer] and not isExcluded(dealer.Name) then
                     knownDealers[dealer] = true
                     local captured = dealer
                     local lastKnownPos = nil
@@ -5128,6 +5317,17 @@ local function createMainUI()
                 dealerRefreshBtn.Text = "⏳  Scan en cours..."
                 dealerRefreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 20)
                 local n = refreshDealers()
+                if tabContents["dealer"] then
+                    for _, child in ipairs(tabContents["dealer"]:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            local label = child:FindFirstChildWhichIsA("TextLabel")
+                            local displayName = (label and label.Text or child.Text):lower()
+                            if displayName:find("conces", 1, true) then
+                                child:Destroy()
+                            end
+                        end
+                    end
+                end
                 task.wait(0.4)
                 if n > 0 then
                     dealerRefreshBtn.Text = string.format("✅  +%d dealer(s) ajouté(s)", n)
@@ -5662,6 +5862,9 @@ local function createMainUI()
     end
 
     local function refreshPlayersTab()
+        if dealerRefreshBtn then
+            dealerRefreshBtn.Visible = (currentTab == "dealer")
+        end
         local playersFrame = tabContents.players
         if not playersFrame then
             return
@@ -6130,6 +6333,7 @@ local function createMainUI()
         itemsPad.PaddingRight = UDim.new(0, 6)
         itemsPad.Parent = itemsScroll
 
+
         local function giveToolToCharacter(tool)
             local char = player.Character
             if not char then return end
@@ -6241,21 +6445,450 @@ local function createMainUI()
         end)
     end
 
-    local mbTeleport = makeMenuButton(t("menu_teleport"), Color3.fromRGB(0, 150, 220), function()
+    -- ===== AUTO VOLE =====
+    local autoVoleRunning = false
+    local autoVoleBtn = nil
+
+    local function stopAutoVole()
+        autoVoleRunning = false
+        if autoVoleBtn then
+            autoVoleBtn.Text = "🤖  AUTO VOLE"
+            autoVoleBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 20)
+        end
+    end
+
+    local function isVendingMachineEmpty(machine)
+        local light = machine:FindFirstChild("Light")
+        if not light then
+            for _, d in ipairs(machine:GetDescendants()) do
+                if d.Name == "Light" and d:IsA("BasePart") then light = d break end
+            end
+        end
+        if light and light:IsA("BasePart") then
+            local c = light.Color
+            local t1 = Color3.fromRGB(196, 40, 28)
+            return math.abs(c.R - t1.R) < 0.05
+                and math.abs(c.G - t1.G) < 0.05
+                and math.abs(c.B - t1.B) < 0.05
+        end
+        return false
+    end
+
+    local VIM = game:GetService("VirtualInputManager")
+
+    -- Verifie si le joueur est assis (systeme SeatPart existant)
+    local function isSeated()
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        return hum and hum.SeatPart ~= nil
+    end
+
+    -- Monte dans le vehicule : TP HRP sur le DriveSeat puis touche E
+    local function mountVehicle(vehicle)
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum then return false end
+
+        -- Trouver le DriveSeat (VehicleSeat) dans le vehicule
+        local driveSeat = vehicle:FindFirstChildWhichIsA("VehicleSeat")
+            or vehicle:FindFirstChild("DriveSeat")
+        local snapTarget = driveSeat or getVehicleRoot(vehicle)
+        if not snapTarget then return false end
+
+        -- Teleporter le HRP directement au-dessus du siege (fiable meme avec mur)
+        hrp.CFrame = CFrame.new(
+            snapTarget.Position + Vector3.new(0, 2, 0),
+            snapTarget.Position + Vector3.new(0, 2, 0) + snapTarget.CFrame.LookVector
+        )
+        task.wait(0.15)
+
+        -- Simuler la touche E (declenche la ProximityPrompt du siege)
+        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        task.wait(0.15)
+        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+
+        -- Attendre confirmation SeatPart (max 3s)
+        local t0 = tick()
+        while tick() - t0 < 3 do
+            if isSeated() and isLocalPlayerSeatedInVehicle(vehicle) then return true end
+            task.wait(0.1)
+        end
+        return isSeated() and isLocalPlayerSeatedInVehicle(vehicle)
+    end
+
+    local function dismountChar()
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if hum and hum.SeatPart then
+            hum.Jump = true
+            task.wait(0.7)
+        end
+    end
+
+    -- 6 coups F espaces de 0.8s
+    local function hitMachine6()
+        for hit = 1, 6 do
+            if not autoVoleRunning then break end
+            VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+            task.wait(0.1)
+            VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+            if hit < 6 then task.wait(0.7) end -- total 0.8s par coup
+        end
+    end
+
+    -- Colorier la machine en rouge, retourner les couleurs d'origine
+    local function highlightMachineRed(machine)
+        local saved = {}
+        for _, p in ipairs(machine:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name ~= "Light" then
+                saved[p] = {color = p.Color, mat = p.Material}
+                p.Color = Color3.fromRGB(200, 40, 40)
+            end
+        end
+        return saved
+    end
+
+    local function restoreMachineColors(saved)
+        for part, data in pairs(saved) do
+            if part and part.Parent then
+                part.Color = data.color
+            end
+        end
+    end
+
+    -- Ramasser un item : touche E maintenu 3s
+    local function collectItem(drop)
+        local prompt = nil
+        for _, d in ipairs(drop:GetDescendants()) do
+            if d:IsA("ProximityPrompt") then prompt = d break end
+        end
+        if prompt then
+            prompt:InputHoldBegin()
+            task.wait(3.2)
+            prompt:InputHoldEnd()
+        else
+            VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait(3)
+            VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        end
+    end
+
+    -- Retourne la position du devant de la machine (LookVector = face avant)
+    local function getMachineFrontPos(machRoot, dist)
+        return (machRoot.CFrame * CFrame.new(0, 0, -dist)).Position
+    end
+
+    local function waitTpDone()
+        task.wait(0.15)
+        while state.isTPing do task.wait(0.1) end
+    end
+
+    -- Detecte si un policier est a portee (equipe Police ou attribut job)
+    local function isCopNearby(pos, radius)
+        for _, p in ipairs(game.Players:GetPlayers()) do
+            if p == player then continue end
+            local char = p.Character
+            local hrpC = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrpC then continue end
+            if (hrpC.Position - pos).Magnitude > radius then continue end
+            local isCop = false
+            local team = p.Team
+            if team then
+                local tn = team.Name:lower()
+                if tn:find("polic") or tn:find("cop") or tn:find("sherif") or tn:find("gendar") then
+                    isCop = true
+                end
+            end
+            if not isCop then
+                local jobVal = (char and char:FindFirstChild("Job")) or p:FindFirstChild("Job")
+                if jobVal and tostring(jobVal.Value or ""):lower():find("polic") then
+                    isCop = true
+                end
+            end
+            if isCop then return true end
+        end
+        return false
+    end
+
+    -- Ramasse tous les drops dans un rayon depuis un centre
+    local function collectDropsNear(center, maxDist)
+        local dropsFolder = workspace:FindFirstChild("Drops")
+        if not dropsFolder then return end
+        local attempted = {}
+        local deadline = tick() + 30
+        while autoVoleRunning and tick() < deadline do
+            local drop, dropPart = nil, nil
+            for _, d in ipairs(dropsFolder:GetChildren()) do
+                if attempted[d] then continue end
+                local p = d:IsA("BasePart") and d or d:FindFirstChildWhichIsA("BasePart")
+                if p and (p.Position - center).Magnitude <= maxDist then
+                    drop = d; dropPart = p; break
+                end
+            end
+            if not drop then break end
+            attempted[drop] = true
+            local hrp2 = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp2 then break end
+            statusLabel.Text = "Auto vole: collecte item..."
+            if (hrp2.Position - dropPart.Position).Magnitude <= 20 then
+                hrp2.CFrame = CFrame.new(dropPart.Position + Vector3.new(0, 2, 0))
+                task.wait(0.1)
+            else
+                microTeleport(dropPart.Position, statusLabel, {walkMode = true})
+                waitTpDone()
+            end
+            if not autoVoleRunning then break end
+            collectItem(drop)
+            task.wait(0.3)
+        end
+    end
+
+    local function runAutoVole()
+        if autoVoleRunning then stopAutoVole() return end
+        autoVoleRunning = true
+        autoVoleBtn.Text = "⏹  STOP VOLE"
+        autoVoleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+
+        task.spawn(function()
+            -- 1. Trouver le vehicule
+            local vehicle = findVehicle()
+            if not vehicle then
+                statusLabel.Text = "Auto vole: aucun vehicule detecte"
+                stopAutoVole() return
+            end
+
+            -- 2. Monter dans le vehicule si pas dedans
+            if not isLocalPlayerSeatedInVehicle(vehicle) then
+                statusLabel.Text = "Auto vole: approche vehicule..."
+                local ok = mountVehicle(vehicle)
+                task.wait(0.4)
+                if not ok then
+                    statusLabel.Text = "Auto vole: impossible de monter (E)"
+                    stopAutoVole() return
+                end
+            end
+            if not isLocalPlayerSeatedInVehicle(vehicle) then
+                statusLabel.Text = "Auto vole: pas dans le vehicule"
+                stopAutoVole() return
+            end
+
+            -- 3. Dossiers de cibles
+            local robFolder   = workspace:FindFirstChild("Robberies")
+            local vmFolder    = robFolder and robFolder:FindFirstChild("VendingMachines")
+            local jwRobbables = robFolder
+                and robFolder:FindFirstChild("Jeweler Robbery")
+                and robFolder:FindFirstChild("Jeweler Robbery"):FindFirstChild("Robbables")
+
+            local doneMachines  = {}
+            local doneJewelry   = {}
+
+            -- Retourne la position centrale d'un modele de bijou
+            local function getJewelryPos(model)
+                local piv = model.PrimaryPart
+                if piv then return piv.Position end
+                local p = model:FindFirstChildWhichIsA("BasePart", true)
+                return p and p.Position or nil
+            end
+
+            -- Boucle principale : distributeurs + bijouterie
+            while autoVoleRunning do
+                local targets = {}
+
+                -- Distributeurs
+                if vmFolder then
+                    for _, machine in ipairs(vmFolder:GetChildren()) do
+                        if doneMachines[machine] then continue end
+                        if isVendingMachineEmpty(machine) then
+                            doneMachines[machine] = true; continue
+                        end
+                        local r = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
+                        if r then table.insert(targets, {type="machine", machine=machine, root=r}) end
+                    end
+                end
+
+                -- Vitrines bijouterie (Broken=false => pas encore volee)
+                if jwRobbables then
+                    for _, model in ipairs(jwRobbables:GetChildren()) do
+                        if doneJewelry[model] then continue end
+                        if model:GetAttribute("Broken") == true then
+                            doneJewelry[model] = true; continue
+                        end
+                        local pos = getJewelryPos(model)
+                        if pos then table.insert(targets, {type="jewelry", model=model, pos=pos}) end
+                    end
+                end
+
+                if #targets == 0 then break end
+
+                -- Cible la plus proche
+                local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if not hrp then break end
+                local nearest, nearestDist = nil, math.huge
+                for _, tgt in ipairs(targets) do
+                    local p = tgt.type == "machine" and tgt.root.Position or tgt.pos
+                    local d = (hrp.Position - p).Magnitude
+                    if d < nearestDist then nearest = tgt; nearestDist = d end
+                end
+                if not nearest then break end
+
+                -- ── DISTRIBUTEUR ─────────────────────────────────────────────
+                if nearest.type == "machine" then
+                    local machine = nearest.machine
+                    local machRoot = nearest.root
+
+                    if isCopNearby(machRoot.Position, 200) then task.wait(1); continue end
+
+                    statusLabel.Text = "Auto vole: conduite vers distributeur..."
+                    local driveTarget = getMachineFrontPos(machRoot, 7)
+                    microTeleport(driveTarget, statusLabel, {wallPass = true})
+                    waitTpDone()
+                    if not autoVoleRunning then break end
+
+                    dismountChar(); task.wait(0.4)
+
+                    local glassPart = machine:FindFirstChild("Glass")
+                    local walkTarget, facePos
+                    if glassPart then
+                        local outDir = Vector3.new(
+                            glassPart.Position.X - machRoot.Position.X, 0,
+                            glassPart.Position.Z - machRoot.Position.Z)
+                        outDir = outDir.Magnitude > 0.01 and outDir.Unit or machRoot.CFrame.LookVector
+                        walkTarget = glassPart.Position + outDir * 2
+                        facePos    = glassPart.Position
+                    else
+                        walkTarget = getMachineFrontPos(machRoot, 2.5)
+                        facePos    = machRoot.Position
+                    end
+
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and (hrp.Position - machRoot.Position).Magnitude <= 20 then
+                        hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15)
+                    else
+                        microTeleport(walkTarget, statusLabel, {walkMode = true}); waitTpDone()
+                    end
+                    if not autoVoleRunning then break end
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15) end
+                    if not autoVoleRunning then break end
+
+                    statusLabel.Text = "Auto vole: tape distributeur..."
+                    local savedColors = highlightMachineRed(machine)
+                    local hitDeadline = tick() + 60
+                    local copStopped = false
+                    while autoVoleRunning and tick() < hitDeadline do
+                        if isVendingMachineEmpty(machine) then break end
+                        if isCopNearby(machRoot.Position, 60) then copStopped = true; break end
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game); task.wait(0.1)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game); task.wait(0.7)
+                    end
+                    restoreMachineColors(savedColors)
+
+                    if copStopped then
+                        if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
+                            mountVehicle(vehicle); task.wait(0.4)
+                        end
+                        continue
+                    end
+
+                    doneMachines[machine] = true
+                    task.wait(1.2)
+                    collectDropsNear(machRoot.Position, 80)
+
+                -- ── VITRINE BIJOUTERIE ────────────────────────────────────────
+                else
+                    local model   = nearest.model
+                    local jwPos   = nearest.pos
+                    local jwCenter = jwPos
+
+                    if isCopNearby(jwCenter, 200) then task.wait(1); continue end
+
+                    -- Conduire vers la vitrine
+                    statusLabel.Text = "Auto vole: bijouterie " .. model.Name .. "..."
+                    microTeleport(jwCenter + Vector3.new(0, 0, 3), statusLabel, {wallPass = true})
+                    waitTpDone()
+                    if not autoVoleRunning then break end
+
+                    dismountChar(); task.wait(0.4)
+
+                    -- Se placer devant la vitrine
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        hrp.CFrame = CFrame.new(jwCenter + Vector3.new(0, 1, 2), jwCenter)
+                        task.wait(0.15)
+                    end
+                    if not autoVoleRunning then break end
+
+                    -- Taper F jusqu'a ce que Broken = true
+                    statusLabel.Text = "Auto vole: casse vitrine " .. model.Name .. "..."
+                    local hitDeadline = tick() + 60
+                    local copStopped = false
+                    while autoVoleRunning and tick() < hitDeadline do
+                        if model:GetAttribute("Broken") == true then break end
+                        if isCopNearby(jwCenter, 60) then copStopped = true; break end
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(jwCenter + Vector3.new(0, 1, 2), jwCenter) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game); task.wait(0.1)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game); task.wait(0.7)
+                    end
+
+                    if copStopped then
+                        if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
+                            mountVehicle(vehicle); task.wait(0.4)
+                        end
+                        continue
+                    end
+
+                    -- Broken = true : appuyer E pour ramasser
+                    if autoVoleRunning and model:GetAttribute("Broken") == true then
+                        statusLabel.Text = "Auto vole: ramasse bijoux " .. model.Name .. "..."
+                        task.wait(0.3)
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(jwCenter + Vector3.new(0, 1, 2), jwCenter) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                        task.wait(3)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                        task.wait(0.3)
+                    end
+
+                    doneJewelry[model] = true
+                end
+
+                -- Remonter dans le vehicule apres chaque cible
+                if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
+                    statusLabel.Text = "Auto vole: retour vehicule..."
+                    mountVehicle(vehicle); task.wait(0.4)
+                    if not isLocalPlayerSeatedInVehicle(vehicle) then
+                        statusLabel.Text = "Auto vole: echec montee, arret"
+                        stopAutoVole() return
+                    end
+                end
+            end
+
+            statusLabel.Text = "Auto vole: termine !"
+            stopAutoVole()
+        end)
+    end
+    -- ===== FIN AUTO VOLE =====
+
+    local mbTeleport = makeMenuButton(t("menu_teleport"), Color3.fromRGB(0, 140, 210), function()
         showScreen("teleport")
-    end)
+    end, "📍")
+    mbTeleport.LayoutOrder = 1
     tReg(mbTeleport, "menu_teleport")
 
-    local mbCustom = makeMenuButton(t("menu_custom"), Color3.fromRGB(30, 80, 55), function()
+    local mbCustom = makeMenuButton(t("menu_custom"), Color3.fromRGB(25, 90, 55), function()
         showScreen("custom")
-    end)
+    end, "🚗")
+    mbCustom.LayoutOrder = 2
     tReg(mbCustom, "menu_custom")
 
-    local mbWp = makeMenuButton(t("menu_waypoints"), Color3.fromRGB(0, 120, 180), function()
+    local mbWp = makeMenuButton(t("menu_waypoints"), Color3.fromRGB(0, 110, 170), function()
         refreshWaypointList()
         refreshWaypointLiveLabels()
         showScreen("waypoints")
-    end)
+    end, "🗺")
+    mbWp.LayoutOrder = 3
     tReg(mbWp, "menu_waypoints")
 
     -- Ecoute globale de la touche orbit
@@ -6275,24 +6908,59 @@ local function createMainUI()
         refreshModeButtons()
     end)
 
-    local mbItems = makeMenuButton(t("menu_items"), Color3.fromRGB(80, 50, 130), function()
+    local mbItems = makeMenuButton(t("menu_items"), Color3.fromRGB(75, 45, 130), function()
         showScreen("items")
-    end)
+    end, "🎒")
+    mbItems.LayoutOrder = 4
     tReg(mbItems, "menu_items")
 
-    local mbRespawn = makeMenuButton(t("menu_respawn"), Color3.fromRGB(120, 40, 40), function()
+    autoVoleBtn = makeMenuButton("AUTO VOLE", Color3.fromRGB(140, 60, 20), function()
+        runAutoVole()
+    end, "🏧")
+    autoVoleBtn.LayoutOrder = 5
+
+    -- Indicateur de proximite : vert si un distributeur valide est a portee, rouge sinon
+    task.spawn(function()
+        local PROXIMITY = 150 -- studs
+        while autoVoleBtn and autoVoleBtn.Parent do
+            task.wait(3)
+            if autoVoleRunning then continue end
+            local vmF = workspace:FindFirstChild("Robberies")
+            vmF = vmF and vmF:FindFirstChild("VendingMachines")
+            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            local hasNearby = false
+            if vmF and hrp then
+                for _, machine in ipairs(vmF:GetChildren()) do
+                    if isVendingMachineEmpty(machine) then continue end
+                    local r = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
+                    if r and (hrp.Position - r.Position).Magnitude <= PROXIMITY then
+                        hasNearby = true; break
+                    end
+                end
+            end
+            if hasNearby then
+                autoVoleBtn.BackgroundColor3 = Color3.fromRGB(30, 140, 55)
+            else
+                autoVoleBtn.BackgroundColor3 = Color3.fromRGB(140, 40, 40)
+            end
+        end
+    end)
+
+    local mbRespawn = makeMenuButton(t("menu_respawn"), Color3.fromRGB(120, 35, 35), function()
         local char = player.Character
         if not char then return end
         local upperTorso = char:FindFirstChild("UpperTorso")
         if upperTorso then upperTorso:Destroy() end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then hum.Health = 0 end
-    end)
+    end, "💀")
+    mbRespawn.LayoutOrder = 6
     tReg(mbRespawn, "menu_respawn")
 
-    local mbDel = makeMenuButton(t("menu_delete"), Color3.fromRGB(145, 45, 45), function()
+    local mbDel = makeMenuButton(t("menu_delete"), Color3.fromRGB(130, 40, 40), function()
         destroyTeleportUI()
-    end)
+    end, "🗑")
+    mbDel.LayoutOrder = 7
     tReg(mbDel, "menu_delete")
 
     backBtn.MouseButton1Click:Connect(function()
