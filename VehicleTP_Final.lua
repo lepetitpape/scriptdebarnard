@@ -120,6 +120,14 @@ local state = {
     waypointMarker = nil,
     groundGuardRunning = false,
     vehiclePings = {},
+    autoRobBijou     = false,  -- Voler la bijouterie (desactive par defaut)
+    autoRobDistrib   = true,   -- Voler les distributeurs (active par defaut)
+    autoUnTaze       = false,  -- Annuler Tazed automatiquement (desactive par defaut)
+    autoUnCuff       = true,   -- Annuler menottes automatiquement (active par defaut)
+    tracerEnabled    = true,   -- Traceur joueurs (active par defaut)
+    tracerDist        = 1000,   -- Distance de detection traceur (studs)
+    tracerLineEnabled = false,  -- Ligne traceur (desactivee par defaut)
+    atmosphereEnabled = true,   -- Atmosphere Lighting activee
     lang = "fr",
     horseEnabled = false,
     horseModel = nil,
@@ -160,6 +168,25 @@ local TRANSLATIONS = {
         notif_police_many = "🚔 %d policiers detectes",
         notif_police_sub  = "Plus proche : %d studs",
         menu_items      = "🎒 ITEMS",
+        menu_params     = "PARAMETRES",
+        params_title    = "PARAMETRES",
+        params_back     = "← RETOUR",
+        params_autoRobCat      = "AUTO ROB",
+        params_robBijou        = "Voler la bijouterie",
+        params_robDistrib      = "Voler distributeur",
+        params_policeCat       = "POLICE ARRÊT",
+        params_autoUnTaze      = "Tazed",
+        params_autoUnCuff      = "Menotte",
+        params_joueursCat      = "JOUEURS",
+        params_atmosphere      = "Atmosphere",
+        params_traceur         = "Traceur",
+        params_traceurDist     = "Distance traceur",
+        params_traceurLigne    = "Ligne traceur",
+        params_orbitCat        = "TOUCHE ORBIT",
+        params_touchesCat      = "TOUCHES",
+        params_sonsCat         = "SONS",
+        params_hudCat          = "HUD",
+        params_vehiculeCat     = "VEHICULE",
         items_title     = "ITEMS — ReplicatedStorage",
         items_hint      = "Clique pour equiper un outil",
         items_none      = "Aucun outil trouve dans ReplicatedStorage.Tools",
@@ -327,6 +354,25 @@ local TRANSLATIONS = {
         notif_police_many = "🚔 %d officers detected",
         notif_police_sub  = "Closest: %d studs",
         menu_items      = "🎒 ITEMS",
+        menu_params     = "SETTINGS",
+        params_title    = "SETTINGS",
+        params_back     = "← BACK",
+        params_autoRobCat      = "AUTO ROB",
+        params_robBijou        = "Rob jewelry store",
+        params_robDistrib      = "Rob vending machines",
+        params_policeCat       = "POLICE ARREST",
+        params_autoUnTaze      = "Tazed",
+        params_autoUnCuff      = "Handcuffs",
+        params_joueursCat      = "PLAYERS",
+        params_atmosphere      = "Atmosphere",
+        params_traceur         = "Tracer",
+        params_traceurDist     = "Tracer distance",
+        params_traceurLigne    = "Tracer line",
+        params_orbitCat        = "ORBIT KEY",
+        params_touchesCat      = "KEYS",
+        params_sonsCat         = "SOUNDS",
+        params_hudCat          = "HUD",
+        params_vehiculeCat     = "VEHICLE",
         items_title     = "ITEMS — ReplicatedStorage",
         items_hint      = "Click to equip a tool",
         items_none      = "No tools found in ReplicatedStorage.Tools",
@@ -3241,13 +3287,1064 @@ local function createMainUI()
     itemsScreen.Visible = false
     itemsScreen.Parent = content
 
+    local paramsScreen = Instance.new("Frame")
+    paramsScreen.Name = "Params"
+    paramsScreen.Size = UDim2.new(1, 0, 1, 0)
+    paramsScreen.BackgroundTransparency = 1
+    paramsScreen.Visible = false
+    paramsScreen.Parent = content
+
     local function showScreen(screenKey)
         menuScreen.Visible     = screenKey == "menu"
         teleportScreen.Visible = screenKey == "teleport"
         waypointScreen.Visible = screenKey == "waypoints"
         customScreen.Visible   = screenKey == "custom"
         itemsScreen.Visible    = screenKey == "items"
+        paramsScreen.Visible   = screenKey == "params"
     end
+
+    -- ===== PARAMETRES UI =====
+    do
+        -- Bouton retour
+        local prBack = Instance.new("TextButton")
+        prBack.Size = UDim2.new(0, 110, 0, 34)
+        prBack.Position = UDim2.new(0, 10, 0, 8)
+        prBack.BackgroundColor3 = Color3.fromRGB(38, 52, 82)
+        prBack.TextColor3 = Color3.fromRGB(200, 220, 255)
+        prBack.TextSize = 12
+        prBack.Font = Enum.Font.GothamBold
+        prBack.BorderSizePixel = 0
+        prBack.Parent = paramsScreen
+        createRounded(prBack, 8)
+        tReg(prBack, "params_back")
+        prBack.MouseButton1Click:Connect(function() showScreen("menu") end)
+
+        -- Titre
+        local prTitle = Instance.new("TextLabel")
+        prTitle.Size = UDim2.new(1, -130, 0, 34)
+        prTitle.Position = UDim2.new(0, 130, 0, 8)
+        prTitle.BackgroundTransparency = 1
+        prTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+        prTitle.TextSize = 15
+        prTitle.Font = Enum.Font.GothamBold
+        prTitle.Parent = paramsScreen
+        tReg(prTitle, "params_title")
+
+        -- Panneau principal (scrollable)
+        local prPanel = Instance.new("ScrollingFrame")
+        prPanel.Size = UDim2.new(1, -20, 1, -56)
+        prPanel.Position = UDim2.new(0, 10, 0, 50)
+        prPanel.BackgroundColor3 = Color3.fromRGB(18, 22, 36)
+        prPanel.BorderSizePixel = 0
+        prPanel.CanvasSize = UDim2.new(0, 0, 0, 1300)
+        prPanel.ScrollingDirection = Enum.ScrollingDirection.Y
+        prPanel.ScrollBarThickness = 5
+        prPanel.ScrollBarImageColor3 = Color3.fromRGB(80, 90, 140)
+        prPanel.Parent = paramsScreen
+        createRounded(prPanel, 10)
+
+        -- Helper : cree une ligne de categorie
+        local function makeCatLabel(parent, text, yPos)
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -16, 0, 22)
+            lbl.Position = UDim2.new(0, 8, 0, yPos)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(0, 200, 255)
+            lbl.TextSize = 12
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.Text = "── " .. text .. " ──"
+            lbl.Parent = parent
+            return lbl
+        end
+
+        -- Helper : cree une case a cocher (toggle)
+        local function makeToggle(parent, labelKey, yPos, initialValue, onChange)
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -16, 0, 36)
+            row.Position = UDim2.new(0, 8, 0, yPos)
+            row.BackgroundTransparency = 1
+            row.Parent = parent
+
+            local box = Instance.new("TextButton")
+            box.Size = UDim2.new(0, 28, 0, 28)
+            box.Position = UDim2.new(0, 0, 0.5, -14)
+            box.BackgroundColor3 = initialValue and Color3.fromRGB(30, 160, 80) or Color3.fromRGB(60, 60, 80)
+            box.TextColor3 = Color3.fromRGB(255, 255, 255)
+            box.TextSize = 16
+            box.Font = Enum.Font.GothamBold
+            box.Text = initialValue and "✓" or ""
+            box.BorderSizePixel = 0
+            box.Parent = row
+            createRounded(box, 6)
+
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -40, 1, 0)
+            lbl.Position = UDim2.new(0, 38, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(210, 225, 255)
+            lbl.TextSize = 13
+            lbl.Font = Enum.Font.Gotham
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.Parent = row
+            tReg(lbl, labelKey)
+
+            local val = initialValue
+            box.MouseButton1Click:Connect(function()
+                val = not val
+                box.Text = val and "✓" or ""
+                box.BackgroundColor3 = val and Color3.fromRGB(30, 160, 80) or Color3.fromRGB(60, 60, 80)
+                onChange(val)
+            end)
+            return box, lbl
+        end
+
+        local function makeSimSlider(parent, yPos, fillColor, getVal, setVal, minV, maxV)
+            local valLbl = Instance.new("TextLabel")
+            valLbl.Size = UDim2.new(0, 60, 0, 14)
+            valLbl.Position = UDim2.new(1, -68, 0, yPos)
+            valLbl.BackgroundTransparency = 1
+            valLbl.TextColor3 = Color3.fromRGB(0, 200, 255)
+            valLbl.TextSize = 11
+            valLbl.Font = Enum.Font.GothamBold
+            valLbl.TextXAlignment = Enum.TextXAlignment.Right
+            valLbl.Parent = parent
+
+            local track = Instance.new("Frame")
+            track.Size = UDim2.new(1, -16, 0, 8)
+            track.Position = UDim2.new(0, 8, 0, yPos + 16)
+            track.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+            track.BorderSizePixel = 0
+            track.Parent = parent
+            createRounded(track, 4)
+
+            local fill = Instance.new("Frame")
+            fill.BackgroundColor3 = fillColor
+            fill.BorderSizePixel = 0
+            fill.Parent = track
+            createRounded(fill, 4)
+
+            local handle = Instance.new("TextButton")
+            handle.Size = UDim2.new(0, 18, 0, 18)
+            handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            handle.Text = ""
+            handle.BorderSizePixel = 0
+            handle.ZIndex = 2
+            handle.Parent = track
+            createRounded(handle, 9)
+
+            local function refresh()
+                local pct = (getVal() - minV) / (maxV - minV)
+                fill.Size = UDim2.new(pct, 0, 1, 0)
+                handle.Position = UDim2.new(pct, -9, 0.5, -9)
+                valLbl.Text = tostring(getVal())
+            end
+            refresh()
+
+            local dragging = false
+            handle.InputBegan:Connect(function(inp)
+                if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = true
+                    prPanel.ScrollingEnabled = false
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(inp)
+                if inp.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
+                    dragging = false
+                    prPanel.ScrollingEnabled = true
+                end
+            end)
+            UserInputService.InputChanged:Connect(function(inp)
+                if not dragging then return end
+                if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+                local tp = track.AbsolutePosition
+                local ts = track.AbsoluteSize
+                local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
+                setVal(math.floor(minV + pct * (maxV - minV) + 0.5))
+                refresh()
+            end)
+        end
+
+        -- ── Categorie JOUEURS ──
+        local catJoueurs = makeCatLabel(prPanel, t("params_joueursCat"), 10)
+        tReg(catJoueurs, "params_joueursCat")
+        table.insert(langLabels, { inst = nil, key = "params_joueursCat", updateFn = function()
+            catJoueurs.Text = "── " .. t("params_joueursCat") .. " ──"
+        end})
+
+        -- Atmosphere toggle: boucle qui force les proprietes (le dayNightCycle du jeu les reecrit)
+        local savedAtmProps = nil
+        local atmOverrideActive = false
+
+        local function setAtmosphere(enabled)
+            local atm = game:GetService("Lighting"):FindFirstChildOfClass("Atmosphere")
+            if not atm then return end
+            if enabled then
+                -- Stopper la boucle d'override
+                atmOverrideActive = false
+                if savedAtmProps then
+                    atm.Density = savedAtmProps.Density
+                    atm.Haze    = savedAtmProps.Haze
+                    atm.Glare   = savedAtmProps.Glare
+                    atm.Offset  = savedAtmProps.Offset
+                    atm.Color   = savedAtmProps.Color
+                end
+            else
+                -- Sauvegarder les valeurs d'origine une seule fois
+                if not savedAtmProps then
+                    savedAtmProps = {
+                        Density = atm.Density,
+                        Haze    = atm.Haze,
+                        Glare   = atm.Glare,
+                        Offset  = atm.Offset,
+                        Color   = atm.Color,
+                    }
+                end
+                -- Demarrer la boucle d'override si pas deja active
+                if not atmOverrideActive then
+                    atmOverrideActive = true
+                    task.spawn(function()
+                        while atmOverrideActive do
+                            local a = game:GetService("Lighting"):FindFirstChildOfClass("Atmosphere")
+                            if a then
+                                a.Density = 0
+                                a.Haze    = 0
+                                a.Glare   = 0
+                                a.Offset  = 0
+                            end
+                            task.wait(0.05)
+                        end
+                    end)
+                end
+            end
+        end
+
+        makeToggle(prPanel, "params_atmosphere", 36, state.atmosphereEnabled, function(v)
+            state.atmosphereEnabled = v
+            setAtmosphere(v)
+        end)
+
+        makeToggle(prPanel, "params_traceur", 78, state.tracerEnabled, function(v)
+            state.tracerEnabled = v
+        end)
+
+        makeToggle(prPanel, "params_traceurLigne", 120, state.tracerLineEnabled, function(v)
+            state.tracerLineEnabled = v
+        end)
+
+        -- Slider distance traceur
+        local trDistLabel = Instance.new("TextLabel")
+        trDistLabel.Size = UDim2.new(0.65, 0, 0, 14)
+        trDistLabel.Position = UDim2.new(0, 8, 0, 162)
+        trDistLabel.BackgroundTransparency = 1
+        trDistLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        trDistLabel.TextSize = 11
+        trDistLabel.Font = Enum.Font.Gotham
+        trDistLabel.TextXAlignment = Enum.TextXAlignment.Left
+        trDistLabel.Parent = prPanel
+        tReg(trDistLabel, "params_traceurDist")
+
+        local TR_MIN, TR_MAX = 50, 1000
+        makeSimSlider(prPanel, 162, Color3.fromRGB(255, 60, 60),
+            function() return state.tracerDist end,
+            function(v) state.tracerDist = v end,
+            TR_MIN, TR_MAX)
+
+
+        -- ── Categorie AUTO ROB ──
+        local catAutoRob = makeCatLabel(prPanel, t("params_autoRobCat"), 212)
+        tReg(catAutoRob, "params_autoRobCat")
+        -- Fix : mettre a jour le texte du label de categorie lors du changement de langue
+        table.insert(langLabels, { inst = nil, key = "params_autoRobCat", updateFn = function()
+            catAutoRob.Text = "── " .. t("params_autoRobCat") .. " ──"
+        end})
+
+        makeToggle(prPanel, "params_robDistrib", 240,  state.autoRobDistrib, function(v)
+            state.autoRobDistrib = v
+        end)
+        makeToggle(prPanel, "params_robBijou",   282,  state.autoRobBijou,   function(v)
+            state.autoRobBijou = v
+        end)
+
+        -- ── Categorie POLICE ARRÊT ──
+        local catPolice = makeCatLabel(prPanel, t("params_policeCat"), 330)
+        tReg(catPolice, "params_policeCat")
+        table.insert(langLabels, { inst = nil, key = "params_policeCat", updateFn = function()
+            catPolice.Text = "── " .. t("params_policeCat") .. " ──"
+        end})
+
+        makeToggle(prPanel, "params_autoUnTaze", 356, state.autoUnTaze, function(v)
+            state.autoUnTaze = v
+        end)
+        makeToggle(prPanel, "params_autoUnCuff", 398, state.autoUnCuff, function(v)
+            state.autoUnCuff = v
+        end)
+
+        -- Boucle de surveillance Tazed / Menottes
+        task.spawn(function()
+            while prPanel.Parent do
+                task.wait(0.5)
+                local char = player.Character
+                if char then
+                    if state.autoUnTaze then
+                        if char:GetAttribute("Tazed") then
+                            pcall(function() char:SetAttribute("Tazed", false) end)
+                        end
+                    end
+                    if state.autoUnCuff then
+                        for _, attr in ipairs({"IsCuffed", "IsHeld"}) do
+                            if char:GetAttribute(attr) then
+                                pcall(function() char:SetAttribute(attr, false) end)
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+
+        -- ── Categorie TOUCHE ORBIT ──
+        local catOrbit = makeCatLabel(prPanel, t("params_orbitCat"), 430)
+        tReg(catOrbit, "params_orbitCat")
+        table.insert(langLabels, { inst = nil, key = "params_orbitCat", updateFn = function()
+            catOrbit.Text = "── " .. t("params_orbitCat") .. " ──"
+        end})
+
+        local kbCapOuter = Instance.new("Frame")
+        kbCapOuter.Size = UDim2.new(0, 80, 0, 54)
+        kbCapOuter.Position = UDim2.new(0, 8, 0, 456)
+        kbCapOuter.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
+        kbCapOuter.BorderSizePixel = 0
+        kbCapOuter.Parent = prPanel
+        createRounded(kbCapOuter, 10)
+
+        local kbCapInner = Instance.new("Frame")
+        kbCapInner.Size = UDim2.new(1, -6, 1, -8)
+        kbCapInner.Position = UDim2.new(0, 3, 0, 3)
+        kbCapInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+        kbCapInner.BorderSizePixel = 0
+        kbCapInner.Parent = kbCapOuter
+        createRounded(kbCapInner, 8)
+
+        local kbCapLabel = Instance.new("TextLabel")
+        kbCapLabel.Size = UDim2.new(1, 0, 1, 0)
+        kbCapLabel.BackgroundTransparency = 1
+        kbCapLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+        kbCapLabel.TextSize = 18
+        kbCapLabel.Font = Enum.Font.GothamBold
+        kbCapLabel.Parent = kbCapInner
+
+        local kbInfoLabel = Instance.new("TextLabel")
+        kbInfoLabel.Size = UDim2.new(1, -108, 0, 54)
+        kbInfoLabel.Position = UDim2.new(0, 100, 0, 456)
+        kbInfoLabel.BackgroundTransparency = 1
+        kbInfoLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+        kbInfoLabel.TextSize = 12
+        kbInfoLabel.Font = Enum.Font.Gotham
+        kbInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbInfoLabel.TextWrapped = true
+        kbInfoLabel.Parent = prPanel
+
+        local kbCustomBtn = Instance.new("TextButton")
+        kbCustomBtn.Size = UDim2.new(0, 100, 0, 30)
+        kbCustomBtn.Position = UDim2.new(1, -110, 0, 456)
+        kbCustomBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+        kbCustomBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+        kbCustomBtn.TextSize = 11
+        kbCustomBtn.Font = Enum.Font.GothamBold
+        kbCustomBtn.BorderSizePixel = 0
+        kbCustomBtn.Parent = prPanel
+        createRounded(kbCustomBtn, 8)
+        tReg(kbCustomBtn, "cv_other_key")
+
+        local waitingForKey = false
+
+        local function setOrbitKey(keyCode)
+            state.orbitToggleKey = keyCode
+            local name = tostring(keyCode):gsub("Enum.KeyCode.", "")
+            kbCapLabel.Text = name
+            kbInfoLabel.Text = t("cv_apply_info")
+            kbInfoLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+            kbCapOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+        end
+
+        local function enterListenMode()
+            waitingForKey = true
+            kbCapLabel.Text = "?"
+            kbCapOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+            kbInfoLabel.Text = t("cv_listen")
+            kbInfoLabel.TextColor3 = Color3.fromRGB(255, 210, 60)
+        end
+
+        kbCustomBtn.MouseButton1Click:Connect(enterListenMode)
+        setOrbitKey(state.orbitToggleKey)
+
+        UserInputService.InputBegan:Connect(function(input, _gp)
+            if not waitingForKey then return end
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if input.KeyCode == Enum.KeyCode.Escape then
+                waitingForKey = false
+                setOrbitKey(state.orbitToggleKey)
+                return
+            end
+            waitingForKey = false
+            setOrbitKey(input.KeyCode)
+        end)
+
+        -- ── Categorie TOUCHES (acceleration) ──
+        local catTouches = makeCatLabel(prPanel, t("params_touchesCat"), 524)
+        tReg(catTouches, "params_touchesCat")
+        table.insert(langLabels, { inst = nil, key = "params_touchesCat", updateFn = function()
+            catTouches.Text = "── " .. t("params_touchesCat") .. " ──"
+        end})
+
+        local kbAccelSectionLabel = Instance.new("TextLabel")
+        kbAccelSectionLabel.Size = UDim2.new(1, -16, 0, 16)
+        kbAccelSectionLabel.Position = UDim2.new(0, 8, 0, 550)
+        kbAccelSectionLabel.BackgroundTransparency = 1
+        kbAccelSectionLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbAccelSectionLabel.TextSize = 11
+        kbAccelSectionLabel.Font = Enum.Font.Gotham
+        kbAccelSectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbAccelSectionLabel.Parent = prPanel
+        tReg(kbAccelSectionLabel, "kb_accel_label")
+
+        local kbAccelKeyOuter = Instance.new("Frame")
+        kbAccelKeyOuter.Size = UDim2.new(0, 70, 0, 40)
+        kbAccelKeyOuter.Position = UDim2.new(0, 8, 0, 570)
+        kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+        kbAccelKeyOuter.BorderSizePixel = 0
+        kbAccelKeyOuter.Parent = prPanel
+        createRounded(kbAccelKeyOuter, 8)
+
+        local kbAccelKeyInner = Instance.new("Frame")
+        kbAccelKeyInner.Size = UDim2.new(1, -6, 1, -6)
+        kbAccelKeyInner.Position = UDim2.new(0, 3, 0, 3)
+        kbAccelKeyInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+        kbAccelKeyInner.BorderSizePixel = 0
+        kbAccelKeyInner.Parent = kbAccelKeyOuter
+        createRounded(kbAccelKeyInner, 6)
+
+        local kbAccelKeyLabel = Instance.new("TextLabel")
+        kbAccelKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+        kbAccelKeyLabel.BackgroundTransparency = 1
+        kbAccelKeyLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+        kbAccelKeyLabel.TextSize = 16
+        kbAccelKeyLabel.Font = Enum.Font.GothamBold
+        kbAccelKeyLabel.Parent = kbAccelKeyInner
+
+        local kbAccelChangeBtn = Instance.new("TextButton")
+        kbAccelChangeBtn.Size = UDim2.new(0, 110, 0, 30)
+        kbAccelChangeBtn.Position = UDim2.new(0, 86, 0, 575)
+        kbAccelChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+        kbAccelChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+        kbAccelChangeBtn.TextSize = 11
+        kbAccelChangeBtn.Font = Enum.Font.GothamBold
+        kbAccelChangeBtn.BorderSizePixel = 0
+        kbAccelChangeBtn.Parent = prPanel
+        createRounded(kbAccelChangeBtn, 8)
+        tReg(kbAccelChangeBtn, "kb_accel_change")
+
+        local kbAccelStatusLabel = Instance.new("TextLabel")
+        kbAccelStatusLabel.Size = UDim2.new(0, 130, 0, 30)
+        kbAccelStatusLabel.Position = UDim2.new(0, 202, 0, 575)
+        kbAccelStatusLabel.BackgroundTransparency = 1
+        kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+        kbAccelStatusLabel.TextSize = 11
+        kbAccelStatusLabel.Font = Enum.Font.Gotham
+        kbAccelStatusLabel.TextWrapped = true
+        kbAccelStatusLabel.Parent = prPanel
+
+        local waitingForAccelKey = false
+
+        local function setAccelKey(keyCode)
+            state.accelKey = keyCode
+            local name = tostring(keyCode):gsub("Enum%.KeyCode%.", "")
+            kbAccelKeyLabel.Text = name
+            kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+            kbAccelStatusLabel.Text = t("kb_accel_saved")
+            kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
+            waitingForAccelKey = false
+        end
+        setAccelKey(state.accelKey)
+
+        kbAccelChangeBtn.MouseButton1Click:Connect(function()
+            waitingForAccelKey = true
+            waitingForKey = false
+            kbAccelKeyLabel.Text = "?"
+            kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+            kbAccelStatusLabel.Text = t("kb_accel_listen")
+            kbAccelStatusLabel.TextColor3 = Color3.fromRGB(255, 210, 60)
+        end)
+
+        UserInputService.InputBegan:Connect(function(input, _gp)
+            if not waitingForAccelKey then return end
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if input.KeyCode == Enum.KeyCode.Escape then
+                waitingForAccelKey = false
+                setAccelKey(state.accelKey)
+                return
+            end
+            setAccelKey(input.KeyCode)
+        end)
+
+        -- ── Categorie SONS ──
+        local catSons = makeCatLabel(prPanel, t("params_sonsCat"), 620)
+        tReg(catSons, "params_sonsCat")
+        table.insert(langLabels, { inst = nil, key = "params_sonsCat", updateFn = function()
+            catSons.Text = "── " .. t("params_sonsCat") .. " ──"
+        end})
+
+        local kbPoneySndBtn = Instance.new("TextButton")
+        kbPoneySndBtn.Size = UDim2.new(1, -16, 0, 28)
+        kbPoneySndBtn.Position = UDim2.new(0, 8, 0, 646)
+        kbPoneySndBtn.TextSize = 13
+        kbPoneySndBtn.Font = Enum.Font.GothamBold
+        kbPoneySndBtn.BorderSizePixel = 0
+        kbPoneySndBtn.Parent = prPanel
+        createRounded(kbPoneySndBtn, 7)
+
+        local function updatePoneySndBtn()
+            kbPoneySndBtn.Text = state.poneySoundEnabled and t("kb_poney_snd_on") or t("kb_poney_snd_off")
+            kbPoneySndBtn.BackgroundColor3 = state.poneySoundEnabled
+                and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+            kbPoneySndBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+        end
+        updatePoneySndBtn()
+
+        kbPoneySndBtn.MouseButton1Click:Connect(function()
+            state.poneySoundEnabled = not state.poneySoundEnabled
+            refreshPoneySounds()
+            updatePoneySndBtn()
+        end)
+
+        local kbPoliceSndBtn = Instance.new("TextButton")
+        kbPoliceSndBtn.Size = UDim2.new(1, -16, 0, 28)
+        kbPoliceSndBtn.Position = UDim2.new(0, 8, 0, 680)
+        kbPoliceSndBtn.TextSize = 13
+        kbPoliceSndBtn.Font = Enum.Font.GothamBold
+        kbPoliceSndBtn.BorderSizePixel = 0
+        kbPoliceSndBtn.Parent = prPanel
+        createRounded(kbPoliceSndBtn, 7)
+
+        local function updatePoliceSndBtn()
+            kbPoliceSndBtn.Text = state.policeSoundEnabled and t("kb_police_snd_on") or t("kb_police_snd_off")
+            kbPoliceSndBtn.BackgroundColor3 = state.policeSoundEnabled
+                and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+            kbPoliceSndBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+        end
+        updatePoliceSndBtn()
+
+        kbPoliceSndBtn.MouseButton1Click:Connect(function()
+            state.policeSoundEnabled = not state.policeSoundEnabled
+            refreshPoliceSounds()
+            updatePoliceSndBtn()
+        end)
+
+        -- ── Categorie HUD ──
+        local catHud = makeCatLabel(prPanel, t("params_hudCat"), 722)
+        tReg(catHud, "params_hudCat")
+        table.insert(langLabels, { inst = nil, key = "params_hudCat", updateFn = function()
+            catHud.Text = "── " .. t("params_hudCat") .. " ──"
+        end})
+
+        local kbPoliceNotifBtn = Instance.new("TextButton")
+        kbPoliceNotifBtn.Size = UDim2.new(1, -16, 0, 28)
+        kbPoliceNotifBtn.Position = UDim2.new(0, 8, 0, 748)
+        kbPoliceNotifBtn.TextSize = 13
+        kbPoliceNotifBtn.Font = Enum.Font.GothamBold
+        kbPoliceNotifBtn.BorderSizePixel = 0
+        kbPoliceNotifBtn.Parent = prPanel
+        createRounded(kbPoliceNotifBtn, 7)
+
+        local kbRoleBtn = Instance.new("TextButton")
+        kbRoleBtn.Size = UDim2.new(1, -16, 0, 28)
+        kbRoleBtn.Position = UDim2.new(0, 8, 0, 782)
+        kbRoleBtn.TextSize = 13
+        kbRoleBtn.Font = Enum.Font.GothamBold
+        kbRoleBtn.BorderSizePixel = 0
+        kbRoleBtn.Parent = prPanel
+        createRounded(kbRoleBtn, 7)
+
+        local function updatePoliceNotifBtn()
+            kbPoliceNotifBtn.Text = state.policeNotifEnabled
+                and t("kb_police_notif_on") or t("kb_police_notif_off")
+            kbPoliceNotifBtn.BackgroundColor3 = state.policeNotifEnabled
+                and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+            kbPoliceNotifBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+        end
+
+        local function updateRoleBtn()
+            kbRoleBtn.Text = state.roleDisplayEnabled
+                and t("kb_role_badge_on") or t("kb_role_badge_off")
+            kbRoleBtn.BackgroundColor3 = state.roleDisplayEnabled
+                and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+            kbRoleBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+        end
+
+        updatePoliceNotifBtn()
+        updateRoleBtn()
+
+        kbPoliceNotifBtn.MouseButton1Click:Connect(function()
+            state.policeNotifEnabled = not state.policeNotifEnabled
+            updatePoliceNotifBtn()
+        end)
+
+        kbRoleBtn.MouseButton1Click:Connect(function()
+            state.roleDisplayEnabled = not state.roleDisplayEnabled
+            updateRoleBtn()
+        end)
+
+        -- Slider detection police
+        local kbDistLabel = Instance.new("TextLabel")
+        kbDistLabel.Size = UDim2.new(0.65, 0, 0, 14)
+        kbDistLabel.Position = UDim2.new(0, 8, 0, 818)
+        kbDistLabel.BackgroundTransparency = 1
+        kbDistLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbDistLabel.TextSize = 11
+        kbDistLabel.Font = Enum.Font.Gotham
+        kbDistLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbDistLabel.Parent = prPanel
+        tReg(kbDistLabel, "kb_police_dist")
+
+        local kbDistValLabel = Instance.new("TextLabel")
+        kbDistValLabel.Size = UDim2.new(0, 80, 0, 14)
+        kbDistValLabel.Position = UDim2.new(1, -88, 0, 818)
+        kbDistValLabel.BackgroundTransparency = 1
+        kbDistValLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+        kbDistValLabel.TextSize = 11
+        kbDistValLabel.Font = Enum.Font.GothamBold
+        kbDistValLabel.TextXAlignment = Enum.TextXAlignment.Right
+        kbDistValLabel.Text = tostring(state.policeDetectDist) .. " m"
+        kbDistValLabel.Parent = prPanel
+
+        local kbDistTrack = Instance.new("Frame")
+        kbDistTrack.Size = UDim2.new(1, -16, 0, 8)
+        kbDistTrack.Position = UDim2.new(0, 8, 0, 836)
+        kbDistTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+        kbDistTrack.BorderSizePixel = 0
+        kbDistTrack.Parent = prPanel
+        createRounded(kbDistTrack, 4)
+
+        local kbDistFill = Instance.new("Frame")
+        kbDistFill.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+        kbDistFill.BorderSizePixel = 0
+        kbDistFill.Parent = kbDistTrack
+        createRounded(kbDistFill, 4)
+
+        local kbDistHandle = Instance.new("TextButton")
+        kbDistHandle.Size = UDim2.new(0, 18, 0, 18)
+        kbDistHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        kbDistHandle.Text = ""
+        kbDistHandle.BorderSizePixel = 0
+        kbDistHandle.ZIndex = 2
+        kbDistHandle.Parent = kbDistTrack
+        createRounded(kbDistHandle, 9)
+
+        local DIST_MIN, DIST_MAX = 50, 500
+
+        local function updateDistSlider()
+            local pct = (state.policeDetectDist - DIST_MIN) / (DIST_MAX - DIST_MIN)
+            kbDistFill.Size = UDim2.new(pct, 0, 1, 0)
+            kbDistHandle.Position = UDim2.new(pct, -9, 0.5, -9)
+            kbDistValLabel.Text = tostring(state.policeDetectDist) .. " m"
+        end
+        updateDistSlider()
+
+        local draggingDist = false
+        kbDistHandle.InputBegan:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                draggingDist = true
+                prPanel.ScrollingEnabled = false
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 and draggingDist then
+                draggingDist = false
+                prPanel.ScrollingEnabled = true
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(inp)
+            if not draggingDist then return end
+            if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+            local tp = kbDistTrack.AbsolutePosition
+            local ts = kbDistTrack.AbsoluteSize
+            local relX = math.clamp(inp.Position.X - tp.X, 0, ts.X)
+            local pct = relX / ts.X
+            state.policeDetectDist = math.floor((DIST_MIN + pct * (DIST_MAX - DIST_MIN)) / 10 + 0.5) * 10
+            updateDistSlider()
+        end)
+
+        -- ── Categorie VEHICULE ──
+        local catVehicule = makeCatLabel(prPanel, t("params_vehiculeCat"), 858)
+        tReg(catVehicule, "params_vehiculeCat")
+        table.insert(langLabels, { inst = nil, key = "params_vehiculeCat", updateFn = function()
+            catVehicule.Text = "── " .. t("params_vehiculeCat") .. " ──"
+        end})
+
+        -- DET studs
+        local kbStudsLabel = Instance.new("TextLabel")
+        kbStudsLabel.Size = UDim2.new(1, -16, 0, 16)
+        kbStudsLabel.Position = UDim2.new(0, 8, 0, 884)
+        kbStudsLabel.BackgroundTransparency = 1
+        kbStudsLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbStudsLabel.TextSize = 11
+        kbStudsLabel.Font = Enum.Font.Gotham
+        kbStudsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbStudsLabel.Text = "DET Detectives Bizard — studs"
+        kbStudsLabel.Parent = prPanel
+
+        local kbStudsMinus = Instance.new("TextButton")
+        kbStudsMinus.Size = UDim2.new(0, 34, 0, 26)
+        kbStudsMinus.Position = UDim2.new(0, 8, 0, 902)
+        kbStudsMinus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+        kbStudsMinus.TextColor3 = Color3.fromRGB(220, 220, 255)
+        kbStudsMinus.TextSize = 16
+        kbStudsMinus.Font = Enum.Font.GothamBold
+        kbStudsMinus.Text = "−"
+        kbStudsMinus.BorderSizePixel = 0
+        kbStudsMinus.Parent = prPanel
+        createRounded(kbStudsMinus, 7)
+
+        local kbStudsVal = Instance.new("TextLabel")
+        kbStudsVal.Size = UDim2.new(0, 60, 0, 26)
+        kbStudsVal.Position = UDim2.new(0, 46, 0, 902)
+        kbStudsVal.BackgroundColor3 = Color3.fromRGB(22, 26, 46)
+        kbStudsVal.TextColor3 = Color3.fromRGB(255, 255, 255)
+        kbStudsVal.TextSize = 14
+        kbStudsVal.Font = Enum.Font.GothamBold
+        kbStudsVal.Text = tostring(state.mirrorStuds) .. " st"
+        kbStudsVal.BorderSizePixel = 0
+        kbStudsVal.Parent = prPanel
+        createRounded(kbStudsVal, 7)
+
+        local kbStudsPlus = Instance.new("TextButton")
+        kbStudsPlus.Size = UDim2.new(0, 34, 0, 26)
+        kbStudsPlus.Position = UDim2.new(0, 110, 0, 902)
+        kbStudsPlus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
+        kbStudsPlus.TextColor3 = Color3.fromRGB(220, 220, 255)
+        kbStudsPlus.TextSize = 16
+        kbStudsPlus.Font = Enum.Font.GothamBold
+        kbStudsPlus.Text = "+"
+        kbStudsPlus.BorderSizePixel = 0
+        kbStudsPlus.Parent = prPanel
+        createRounded(kbStudsPlus, 7)
+
+        local function updateStudsDisplay()
+            kbStudsVal.Text = tostring(state.mirrorStuds) .. " st"
+        end
+
+        kbStudsMinus.MouseButton1Click:Connect(function()
+            state.mirrorStuds = math.max(6, state.mirrorStuds - 1)
+            updateStudsDisplay()
+        end)
+        kbStudsPlus.MouseButton1Click:Connect(function()
+            state.mirrorStuds = math.min(12, state.mirrorStuds + 1)
+            updateStudsDisplay()
+        end)
+
+        -- Toggle sim vehicule
+        local kbVehSimBtn = Instance.new("TextButton")
+        kbVehSimBtn.Size = UDim2.new(1, -16, 0, 28)
+        kbVehSimBtn.Position = UDim2.new(0, 8, 0, 936)
+        kbVehSimBtn.TextSize = 13
+        kbVehSimBtn.Font = Enum.Font.GothamBold
+        kbVehSimBtn.BorderSizePixel = 0
+        kbVehSimBtn.Parent = prPanel
+        createRounded(kbVehSimBtn, 7)
+
+        local function updateVehSimBtn()
+            if state.vehSimEnabled then
+                local char = player.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local seat = hum and hum.SeatPart
+                local vehModel = seat and seat:FindFirstAncestorOfClass("Model")
+                local contactOn = vehModel and vehModel:GetAttribute("IsOn")
+                if contactOn then
+                    kbVehSimBtn.Text = t("kb_vehsim_contact_on")
+                    kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(160, 50, 20)
+                    kbVehSimBtn.TextColor3 = Color3.fromRGB(255, 200, 180)
+                    return
+                end
+                kbVehSimBtn.Text = t("kb_vehsim_on")
+                kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 50)
+            else
+                kbVehSimBtn.Text = t("kb_vehsim_off")
+                kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+            end
+            kbVehSimBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+        end
+        updateVehSimBtn()
+
+        task.spawn(function()
+            while prPanel.Parent do
+                task.wait(0.5)
+                if state.vehSimEnabled then updateVehSimBtn() end
+            end
+        end)
+
+        kbVehSimBtn.MouseButton1Click:Connect(function()
+            state.vehSimEnabled = not state.vehSimEnabled
+            if not state.vehSimEnabled then
+                local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+                if vehiclesFolder then
+                    for _, veh in ipairs(vehiclesFolder:GetChildren()) do
+                        if veh:IsA("Model") and not veh:GetAttribute("IsOn") then
+                            pcall(function() veh:SetAttribute("Throttle", 0) end)
+                            pcall(function() veh:SetAttribute("Steering", 0) end)
+                        end
+                    end
+                end
+                vehSimData = {}
+            end
+            updateVehSimBtn()
+        end)
+
+        -- Touche avancer (sim)
+        local kbSimFwdSLabel = Instance.new("TextLabel")
+        kbSimFwdSLabel.Size = UDim2.new(1, -16, 0, 14)
+        kbSimFwdSLabel.Position = UDim2.new(0, 8, 0, 972)
+        kbSimFwdSLabel.BackgroundTransparency = 1
+        kbSimFwdSLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbSimFwdSLabel.TextSize = 11
+        kbSimFwdSLabel.Font = Enum.Font.Gotham
+        kbSimFwdSLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbSimFwdSLabel.Parent = prPanel
+        tReg(kbSimFwdSLabel, "kb_sim_fwd_label")
+
+        local kbSimFwdOuter = Instance.new("Frame")
+        kbSimFwdOuter.Size = UDim2.new(0, 50, 0, 32)
+        kbSimFwdOuter.Position = UDim2.new(0, 8, 0, 988)
+        kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+        kbSimFwdOuter.BorderSizePixel = 0
+        kbSimFwdOuter.Parent = prPanel
+        createRounded(kbSimFwdOuter, 7)
+
+        local kbSimFwdInner = Instance.new("Frame")
+        kbSimFwdInner.Size = UDim2.new(1, -6, 1, -6)
+        kbSimFwdInner.Position = UDim2.new(0, 3, 0, 3)
+        kbSimFwdInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+        kbSimFwdInner.BorderSizePixel = 0
+        kbSimFwdInner.Parent = kbSimFwdOuter
+        createRounded(kbSimFwdInner, 5)
+
+        local kbSimFwdKeyLabel = Instance.new("TextLabel")
+        kbSimFwdKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+        kbSimFwdKeyLabel.BackgroundTransparency = 1
+        kbSimFwdKeyLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+        kbSimFwdKeyLabel.TextSize = 14
+        kbSimFwdKeyLabel.Font = Enum.Font.GothamBold
+        kbSimFwdKeyLabel.Parent = kbSimFwdInner
+
+        local kbSimFwdChangeBtn = Instance.new("TextButton")
+        kbSimFwdChangeBtn.Size = UDim2.new(0, 100, 0, 26)
+        kbSimFwdChangeBtn.Position = UDim2.new(0, 64, 0, 991)
+        kbSimFwdChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+        kbSimFwdChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+        kbSimFwdChangeBtn.TextSize = 11
+        kbSimFwdChangeBtn.Font = Enum.Font.GothamBold
+        kbSimFwdChangeBtn.Text = "CHANGER TOUCHE"
+        kbSimFwdChangeBtn.BorderSizePixel = 0
+        kbSimFwdChangeBtn.Parent = prPanel
+        createRounded(kbSimFwdChangeBtn, 7)
+
+        local kbSimFwdStatus = Instance.new("TextLabel")
+        kbSimFwdStatus.Size = UDim2.new(0, 120, 0, 26)
+        kbSimFwdStatus.Position = UDim2.new(0, 170, 0, 991)
+        kbSimFwdStatus.BackgroundTransparency = 1
+        kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+        kbSimFwdStatus.TextSize = 11
+        kbSimFwdStatus.Font = Enum.Font.Gotham
+        kbSimFwdStatus.TextWrapped = true
+        kbSimFwdStatus.Parent = prPanel
+
+        -- Touche reculer (sim)
+        local kbSimRevSLabel = Instance.new("TextLabel")
+        kbSimRevSLabel.Size = UDim2.new(1, -16, 0, 14)
+        kbSimRevSLabel.Position = UDim2.new(0, 8, 0, 1026)
+        kbSimRevSLabel.BackgroundTransparency = 1
+        kbSimRevSLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbSimRevSLabel.TextSize = 11
+        kbSimRevSLabel.Font = Enum.Font.Gotham
+        kbSimRevSLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbSimRevSLabel.Parent = prPanel
+        tReg(kbSimRevSLabel, "kb_sim_rev_label")
+
+        local kbSimRevOuter = Instance.new("Frame")
+        kbSimRevOuter.Size = UDim2.new(0, 50, 0, 32)
+        kbSimRevOuter.Position = UDim2.new(0, 8, 0, 1042)
+        kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+        kbSimRevOuter.BorderSizePixel = 0
+        kbSimRevOuter.Parent = prPanel
+        createRounded(kbSimRevOuter, 7)
+
+        local kbSimRevInner = Instance.new("Frame")
+        kbSimRevInner.Size = UDim2.new(1, -6, 1, -6)
+        kbSimRevInner.Position = UDim2.new(0, 3, 0, 3)
+        kbSimRevInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+        kbSimRevInner.BorderSizePixel = 0
+        kbSimRevInner.Parent = kbSimRevOuter
+        createRounded(kbSimRevInner, 5)
+
+        local kbSimRevKeyLabel = Instance.new("TextLabel")
+        kbSimRevKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+        kbSimRevKeyLabel.BackgroundTransparency = 1
+        kbSimRevKeyLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+        kbSimRevKeyLabel.TextSize = 14
+        kbSimRevKeyLabel.Font = Enum.Font.GothamBold
+        kbSimRevKeyLabel.Parent = kbSimRevInner
+
+        local kbSimRevChangeBtn = Instance.new("TextButton")
+        kbSimRevChangeBtn.Size = UDim2.new(0, 100, 0, 26)
+        kbSimRevChangeBtn.Position = UDim2.new(0, 64, 0, 1045)
+        kbSimRevChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+        kbSimRevChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+        kbSimRevChangeBtn.TextSize = 11
+        kbSimRevChangeBtn.Font = Enum.Font.GothamBold
+        kbSimRevChangeBtn.Text = "CHANGER TOUCHE"
+        kbSimRevChangeBtn.BorderSizePixel = 0
+        kbSimRevChangeBtn.Parent = prPanel
+        createRounded(kbSimRevChangeBtn, 7)
+
+        local kbSimRevStatus = Instance.new("TextLabel")
+        kbSimRevStatus.Size = UDim2.new(0, 120, 0, 26)
+        kbSimRevStatus.Position = UDim2.new(0, 170, 0, 1045)
+        kbSimRevStatus.BackgroundTransparency = 1
+        kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+        kbSimRevStatus.TextSize = 11
+        kbSimRevStatus.Font = Enum.Font.Gotham
+        kbSimRevStatus.TextWrapped = true
+        kbSimRevStatus.Parent = prPanel
+
+        -- Logique touche sim fwd/rev
+        local waitingSimFwd, waitingSimRev = false, false
+
+        local function setSimFwdKey(kc)
+            state.simFwdKey = kc
+            kbSimFwdKeyLabel.Text = tostring(kc):gsub("Enum%.KeyCode%.", "")
+            kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+            kbSimFwdStatus.Text = "Sauvegarde !"
+            kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+            waitingSimFwd = false
+        end
+
+        local function setSimRevKey(kc)
+            state.simRevKey = kc
+            kbSimRevKeyLabel.Text = tostring(kc):gsub("Enum%.KeyCode%.", "")
+            kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+            kbSimRevStatus.Text = "Sauvegarde !"
+            kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
+            waitingSimRev = false
+        end
+
+        setSimFwdKey(state.simFwdKey)
+        setSimRevKey(state.simRevKey)
+
+        kbSimFwdChangeBtn.MouseButton1Click:Connect(function()
+            waitingSimFwd = true; waitingSimRev = false
+            kbSimFwdKeyLabel.Text = "?"
+            kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+            kbSimFwdStatus.Text = "Appuie une touche..."
+            kbSimFwdStatus.TextColor3 = Color3.fromRGB(255, 210, 60)
+        end)
+
+        kbSimRevChangeBtn.MouseButton1Click:Connect(function()
+            waitingSimRev = true; waitingSimFwd = false
+            kbSimRevKeyLabel.Text = "?"
+            kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+            kbSimRevStatus.Text = "Appuie une touche..."
+            kbSimRevStatus.TextColor3 = Color3.fromRGB(255, 210, 60)
+        end)
+
+        UserInputService.InputBegan:Connect(function(input, _gp)
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if input.KeyCode == Enum.KeyCode.Escape then
+                if waitingSimFwd then setSimFwdKey(state.simFwdKey) end
+                if waitingSimRev then setSimRevKey(state.simRevKey) end
+                return
+            end
+            if waitingSimFwd then setSimFwdKey(input.KeyCode) return end
+            if waitingSimRev then setSimRevKey(input.KeyCode) return end
+        end)
+
+        -- Sliders vitesse sim
+        local SIM_FWD_MIN, SIM_FWD_MAX = 10, 375
+        local SIM_REV_MIN, SIM_REV_MAX = 5,  30
+        local SIM_ACCEL_MIN, SIM_ACCEL_MAX = 5, 220
+
+
+        -- Slider vitesse avancer
+        local kbSimFwdSpdLabel = Instance.new("TextLabel")
+        kbSimFwdSpdLabel.Size = UDim2.new(0.65, 0, 0, 14)
+        kbSimFwdSpdLabel.Position = UDim2.new(0, 8, 0, 1080)
+        kbSimFwdSpdLabel.BackgroundTransparency = 1
+        kbSimFwdSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbSimFwdSpdLabel.TextSize = 11
+        kbSimFwdSpdLabel.Font = Enum.Font.Gotham
+        kbSimFwdSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbSimFwdSpdLabel.Parent = prPanel
+        tReg(kbSimFwdSpdLabel, "kb_sim_speed_fwd")
+        makeSimSlider(prPanel, 1080, Color3.fromRGB(0, 160, 220),
+            function() return state.simMaxFwd end,
+            function(v) state.simMaxFwd = v end,
+            SIM_FWD_MIN, SIM_FWD_MAX)
+
+        -- Slider vitesse reculer
+        local kbSimRevSpdLabel = Instance.new("TextLabel")
+        kbSimRevSpdLabel.Size = UDim2.new(0.65, 0, 0, 14)
+        kbSimRevSpdLabel.Position = UDim2.new(0, 8, 0, 1114)
+        kbSimRevSpdLabel.BackgroundTransparency = 1
+        kbSimRevSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbSimRevSpdLabel.TextSize = 11
+        kbSimRevSpdLabel.Font = Enum.Font.Gotham
+        kbSimRevSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbSimRevSpdLabel.Parent = prPanel
+        tReg(kbSimRevSpdLabel, "kb_sim_speed_rev")
+        makeSimSlider(prPanel, 1114, Color3.fromRGB(220, 80, 80),
+            function() return state.simMaxRev end,
+            function(v) state.simMaxRev = v end,
+            SIM_REV_MIN, SIM_REV_MAX)
+
+        -- Slider acceleration
+        local kbSimAccelSLabel = Instance.new("TextLabel")
+        kbSimAccelSLabel.Size = UDim2.new(0.65, 0, 0, 14)
+        kbSimAccelSLabel.Position = UDim2.new(0, 8, 0, 1148)
+        kbSimAccelSLabel.BackgroundTransparency = 1
+        kbSimAccelSLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        kbSimAccelSLabel.TextSize = 11
+        kbSimAccelSLabel.Font = Enum.Font.Gotham
+        kbSimAccelSLabel.TextXAlignment = Enum.TextXAlignment.Left
+        kbSimAccelSLabel.Parent = prPanel
+        tReg(kbSimAccelSLabel, "kb_sim_accel_label")
+        makeSimSlider(prPanel, 1148, Color3.fromRGB(200, 140, 0),
+            function() return state.simAccel end,
+            function(v) state.simAccel = v end,
+            SIM_ACCEL_MIN, SIM_ACCEL_MAX)
+
+        -- Toggle panel occupants
+        local kbOccBtn = Instance.new("TextButton")
+        kbOccBtn.Size = UDim2.new(1, -16, 0, 28)
+        kbOccBtn.Position = UDim2.new(0, 8, 0, 1178)
+        kbOccBtn.TextSize = 13
+        kbOccBtn.Font = Enum.Font.GothamBold
+        kbOccBtn.BorderSizePixel = 0
+        kbOccBtn.Parent = prPanel
+        createRounded(kbOccBtn, 7)
+
+        local function updateOccBtn()
+            kbOccBtn.Text = state.occPanelEnabled and t("kb_occ_panel_on") or t("kb_occ_panel_off")
+            kbOccBtn.BackgroundColor3 = state.occPanelEnabled
+                and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
+            kbOccBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
+        end
+        updateOccBtn()
+
+        kbOccBtn.MouseButton1Click:Connect(function()
+            state.occPanelEnabled = not state.occPanelEnabled
+            updateOccBtn()
+        end)
+
+    end
+    -- ===== FIN PARAMETRES UI =====
 
     -- ===== CUSTOM VEHICULE UI =====
     do
@@ -4648,7 +5745,7 @@ local function createMainUI()
                 refreshWaypointLiveLabels()
                 waypointStatusLabel.Text = string.format(t("wp_st_tp"), waypoint.name)
                 task.spawn(function()
-                    microTeleport(waypoint.pos, waypointStatusLabel, { walkMode = true })
+                    microTeleport(waypoint.pos, waypointStatusLabel, { exactTargetY = true })
                 end)
             end)
 
@@ -4710,7 +5807,7 @@ local function createMainUI()
         refreshWaypointLiveLabels()
         waypointStatusLabel.Text = string.format(t("wp_st_tp"), selected.name)
         task.spawn(function()
-            microTeleport(selected.pos, waypointStatusLabel, { walkMode = true })
+            microTeleport(selected.pos, waypointStatusLabel, { exactTargetY = true })
         end)
     end)
 
@@ -5412,7 +6509,7 @@ local function createMainUI()
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p.Character and p.Character:FindFirstChild("Humanoid") == hum then
                         local role = getPlayerRoleLabel(p)
-                        table.insert(result, { name = p.Name, seat = seat.Name, isDriver = isDriver, role = role })
+                        table.insert(result, { name = p.Name, displayName = p.DisplayName, seat = seat.Name, isDriver = isDriver, role = role })
                         break
                     end
                 end
@@ -5518,11 +6615,12 @@ local function createMainUI()
             local occ = occs[i]
             if occ then
                 local roleTag = (occ.role and occ.role ~= "" and occ.role ~= "—") and (" [" .. occ.role .. "]") or ""
+                local occDisplay = (occ.displayName or occ.name) .. " @" .. occ.name
                 if occ.isDriver then
-                    vdpOccLines[i].Text = t("veh_driver_label") .. "  " .. occ.name .. roleTag
+                    vdpOccLines[i].Text = t("veh_driver_label") .. "  " .. occDisplay .. roleTag
                     vdpOccLines[i].TextColor3 = Color3.fromRGB(255, 220, 60)
                 else
-                    vdpOccLines[i].Text = t("veh_passenger_label") .. "  " .. occ.name .. roleTag
+                    vdpOccLines[i].Text = t("veh_passenger_label") .. "  " .. occDisplay .. roleTag
                     vdpOccLines[i].TextColor3 = Color3.fromRGB(200, 200, 200)
                 end
                 vdpOccLines[i].Visible = true
@@ -5681,7 +6779,8 @@ local function createMainUI()
                 local names = {}
                 for _, occ in ipairs(occupants) do
                     local roleTag = (occ.role and occ.role ~= "" and occ.role ~= "—") and (" [" .. occ.role .. "]") or ""
-                    local label = occ.isDriver and ("🚗 " .. occ.name .. roleTag) or ("👤 " .. occ.name .. roleTag)
+                    local occBrief = occ.displayName or occ.name
+                    local label = occ.isDriver and ("🚗 " .. occBrief .. roleTag) or ("👤 " .. occBrief .. roleTag)
                     table.insert(names, label)
                 end
                 local lblOcc = Instance.new("TextLabel")
@@ -5861,6 +6960,77 @@ local function createMainUI()
         end
     end
 
+    -- Spam DestroyedObjects : cible active + thread
+    local spamTarget = nil
+    local spamThread = nil
+    local function stopSpam()
+        spamTarget = nil
+        spamThread = nil
+    end
+    local function launchAllDestroyed(targetPos)
+        local destroyedFolder = workspace:FindFirstChild("DestroyedObjects")
+        if not destroyedFolder then return end
+        for _, obj in ipairs(destroyedFolder:GetChildren()) do
+            local parts = {}
+            if obj:IsA("BasePart") then
+                parts = { obj }
+            elseif obj:IsA("Model") then
+                for _, p in ipairs(obj:GetDescendants()) do
+                    if p:IsA("BasePart") then parts[#parts+1] = p end
+                end
+            end
+            for _, part in ipairs(parts) do
+                pcall(function()
+                    part.Anchored = false
+                    local dist = (part.Position - targetPos).Magnitude
+                    -- Si trop loin (>60 studs) : tp a 5 studs autour
+                    if dist > 60 then
+                        local theta = math.random() * math.pi * 2
+                        local phi   = math.acos(2 * math.random() - 1)
+                        local offset = Vector3.new(
+                            math.sin(phi) * math.cos(theta),
+                            math.sin(phi) * math.sin(theta),
+                            math.cos(phi)
+                        ) * 5
+                        part.CFrame = CFrame.new(targetPos + offset)
+                    end
+                    -- Destination aleatoire a 5 studs autour du joueur
+                    local theta = math.random() * math.pi * 2
+                    local phi   = math.acos(2 * math.random() - 1)
+                    local dest  = targetPos + Vector3.new(
+                        math.sin(phi) * math.cos(theta),
+                        math.sin(phi) * math.sin(theta),
+                        math.cos(phi)
+                    ) * 5
+                    -- Velocity vers cette destination
+                    local dir = (dest - part.Position).Unit
+                    part.AssemblyLinearVelocity = dir * 300
+                    -- Rotation
+                    local rs = math.random(10, 30)
+                    part.AssemblyAngularVelocity = Vector3.new(
+                        (math.random() * 2 - 1) * rs,
+                        (math.random() * 2 - 1) * rs,
+                        (math.random() * 2 - 1) * rs
+                    )
+                end)
+            end
+        end
+    end
+
+    local function startSpam(plr)
+        spamTarget = plr
+        spamThread = task.spawn(function()
+            while spamTarget == plr do
+                local targetChar = plr.Character
+                local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    launchAllDestroyed(targetHrp.Position)
+                end
+                task.wait(0.1)
+            end
+        end)
+    end
+
     local function refreshPlayersTab()
         if dealerRefreshBtn then
             dealerRefreshBtn.Visible = (currentTab == "dealer")
@@ -5889,7 +7059,7 @@ local function createMainUI()
                 local roleColor = getRoleColor(roleLabel)
                 local displayText = string.format(
                     "%s [%s] | X:%.0f Y:%.0f Z:%.0f",
-                    plr.Name,
+                    plr.DisplayName,
                     roleLabel,
                     pNow.X,
                     pNow.Y,
@@ -5919,18 +7089,69 @@ local function createMainUI()
                 dot.Parent = playerBtn
                 createRounded(dot, 8)
 
-                -- Texte du bouton
+                -- Ligne 1 : DisplayName [role] | coords
                 local btnLabel = Instance.new("TextLabel")
-                btnLabel.Size = UDim2.new(1, -34, 1, 0)
-                btnLabel.Position = UDim2.new(0, 32, 0, 0)
+                btnLabel.Size = UDim2.new(1, -96, 0, 38)
+                btnLabel.Position = UDim2.new(0, 32, 0, 4)
                 btnLabel.BackgroundTransparency = 1
                 btnLabel.TextColor3 = Color3.fromRGB(230, 245, 255)
                 btnLabel.TextSize = 13
                 btnLabel.Font = Enum.Font.GothamBold
                 btnLabel.TextXAlignment = Enum.TextXAlignment.Left
+                btnLabel.TextWrapped = true
                 btnLabel.Text = displayText
                 btnLabel.ZIndex = 2
                 btnLabel.Parent = playerBtn
+
+                -- Ligne 2 : @username en petit
+                local usernameLabel = Instance.new("TextLabel")
+                usernameLabel.Size = UDim2.new(1, -96, 0, 18)
+                usernameLabel.Position = UDim2.new(0, 32, 0, 44)
+                usernameLabel.BackgroundTransparency = 1
+                usernameLabel.TextColor3 = Color3.fromRGB(130, 160, 200)
+                usernameLabel.TextSize = 10
+                usernameLabel.Font = Enum.Font.Gotham
+                usernameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                usernameLabel.Text = "@" .. plr.Name
+                usernameLabel.ZIndex = 2
+                usernameLabel.Parent = playerBtn
+
+                -- Bouton lancer DestroyedObjects sur ce joueur
+                local launchBtn = Instance.new("TextButton")
+                launchBtn.Size = UDim2.new(0, 58, 0, 54)
+                launchBtn.Position = UDim2.new(1, -64, 0, 6)
+                launchBtn.BackgroundColor3 = Color3.fromRGB(140, 50, 20)
+                launchBtn.TextColor3 = Color3.fromRGB(255, 220, 180)
+                launchBtn.TextSize = 18
+                launchBtn.Font = Enum.Font.GothamBold
+                launchBtn.Text = "💥"
+                launchBtn.BorderSizePixel = 0
+                launchBtn.ZIndex = 5
+                launchBtn.Parent = playerBtn
+                createRounded(launchBtn, 6)
+
+                local function updateLaunchVisual()
+                    if not launchBtn.Parent then return end
+                    if spamTarget == plr then
+                        launchBtn.BackgroundColor3 = Color3.fromRGB(220, 80, 20)
+                        launchBtn.Text = "🔥"
+                    else
+                        launchBtn.BackgroundColor3 = Color3.fromRGB(140, 50, 20)
+                        launchBtn.Text = "💥"
+                    end
+                end
+                -- Appliquer l'etat visuel immediat (survit aux refreshes)
+                updateLaunchVisual()
+
+                launchBtn.MouseButton1Click:Connect(function()
+                    if spamTarget == plr then
+                        stopSpam()
+                    else
+                        stopSpam()
+                        startSpam(plr)
+                    end
+                    updateLaunchVisual()
+                end)
 
                 playerBtn.MouseEnter:Connect(function()
                     playerBtn.BackgroundColor3 = Color3.fromRGB(70, 110, 160)
@@ -6671,128 +7892,214 @@ local function createMainUI()
                 stopAutoVole() return
             end
 
-            -- 3. Trouver le dossier VendingMachines (optionnel, ok si absent)
-            local vmFolder = workspace:FindFirstChild("Robberies")
-            vmFolder = vmFolder and vmFolder:FindFirstChild("VendingMachines")
+            -- 3. Dossiers de cibles
+            local robFolder   = workspace:FindFirstChild("Robberies")
+            local vmFolder    = robFolder and robFolder:FindFirstChild("VendingMachines")
+            local jwRobbables = robFolder
+                and robFolder:FindFirstChild("Jeweler Robbery")
+                and robFolder:FindFirstChild("Jeweler Robbery"):FindFirstChild("Robbables")
 
-            local doneMachines = {}
+            local doneMachines  = {}
+            local doneJewelry   = {}
 
-            -- Boucle principale : distributeurs uniquement
+            -- Retourne la position centrale d'un modele de bijou
+            local function getJewelryPos(model)
+                local piv = model.PrimaryPart
+                if piv then return piv.Position end
+                local p = model:FindFirstChildWhichIsA("BasePart", true)
+                return p and p.Position or nil
+            end
+
+            -- Boucle principale : distributeurs + bijouterie
             while autoVoleRunning do
                 local targets = {}
 
-                if vmFolder then
+                -- Distributeurs (si active dans parametres)
+                if state.autoRobDistrib and vmFolder then
                     for _, machine in ipairs(vmFolder:GetChildren()) do
                         if doneMachines[machine] then continue end
                         if isVendingMachineEmpty(machine) then
-                            doneMachines[machine] = true
-                            continue
+                            doneMachines[machine] = true; continue
                         end
-                        local machRoot = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
-                        if machRoot then
-                            table.insert(targets, {machine = machine, root = machRoot})
+                        local r = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
+                        if r then table.insert(targets, {type="machine", machine=machine, root=r}) end
+                    end
+                end
+
+                -- Vitrines bijouterie (si active dans parametres)
+                if state.autoRobBijou and jwRobbables then
+                    for _, model in ipairs(jwRobbables:GetChildren()) do
+                        if doneJewelry[model] then continue end
+                        if model:GetAttribute("Broken") == true then
+                            doneJewelry[model] = true; continue
                         end
+                        local pos = getJewelryPos(model)
+                        if pos then table.insert(targets, {type="jewelry", model=model, pos=pos}) end
                     end
                 end
 
                 if #targets == 0 then break end
 
-                -- Trouver le distributeur le plus proche
+                -- Cible la plus proche
                 local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                 if not hrp then break end
                 local nearest, nearestDist = nil, math.huge
                 for _, tgt in ipairs(targets) do
-                    local d = (hrp.Position - tgt.root.Position).Magnitude
+                    local p = tgt.type == "machine" and tgt.root.Position or tgt.pos
+                    local d = (hrp.Position - p).Magnitude
                     if d < nearestDist then nearest = tgt; nearestDist = d end
                 end
                 if not nearest then break end
 
-                local machine = nearest.machine
-                local machRoot = nearest.root
+                -- ── DISTRIBUTEUR ─────────────────────────────────────────────
+                if nearest.type == "machine" then
+                    local machine = nearest.machine
+                    local machRoot = nearest.root
 
-                -- Cop a 200 studs -> re-evaluer au prochain tour
-                if isCopNearby(machRoot.Position, 200) then
-                    task.wait(1)
-                    continue
-                end
+                    if isCopNearby(machRoot.Position, 200) then task.wait(1); continue end
 
-                -- Conduire devant la machine
-                statusLabel.Text = "Auto vole: conduite vers distributeur..."
-                local driveTarget = getMachineFrontPos(machRoot, 7)
-                microTeleport(driveTarget, statusLabel, {wallPass = true})
-                waitTpDone()
-                if not autoVoleRunning then break end
-
-                dismountChar()
-                task.wait(0.4)
-
-                -- Position devant le Glass
-                local glassPart = machine:FindFirstChild("Glass")
-                local walkTarget, facePos
-                if glassPart then
-                    local outDir = Vector3.new(
-                        glassPart.Position.X - machRoot.Position.X,
-                        0,
-                        glassPart.Position.Z - machRoot.Position.Z
-                    )
-                    outDir = outDir.Magnitude > 0.01 and outDir.Unit or machRoot.CFrame.LookVector
-                    walkTarget = glassPart.Position + outDir * 2
-                    facePos    = glassPart.Position
-                else
-                    walkTarget = getMachineFrontPos(machRoot, 2.5)
-                    facePos    = machRoot.Position
-                end
-
-                hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position - machRoot.Position).Magnitude <= 20 then
-                    hrp.CFrame = CFrame.new(walkTarget, facePos)
-                    task.wait(0.15)
-                else
-                    microTeleport(walkTarget, statusLabel, {walkMode = true})
+                    statusLabel.Text = "Auto vole: conduite vers distributeur..."
+                    local driveTarget = getMachineFrontPos(machRoot, 13)
+                    microTeleport(driveTarget, statusLabel, {wallPass = true})
                     waitTpDone()
-                end
-                if not autoVoleRunning then break end
+                    if not autoVoleRunning then break end
 
-                hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15) end
-                if not autoVoleRunning then break end
+                    dismountChar(); task.wait(0.4)
 
-                -- Frappe de la machine
-                statusLabel.Text = "Auto vole: tape distributeur..."
-                local savedColors = highlightMachineRed(machine)
-                local hitDeadline = tick() + 60
-                local copStopped = false
-                while autoVoleRunning and tick() < hitDeadline do
-                    if isVendingMachineEmpty(machine) then break end
-                    if isCopNearby(machRoot.Position, 60) then
-                        copStopped = true; break
+                    local glassPart = machine:FindFirstChild("Glass")
+                    local walkTarget, facePos
+                    if glassPart then
+                        local outDir = Vector3.new(
+                            glassPart.Position.X - machRoot.Position.X, 0,
+                            glassPart.Position.Z - machRoot.Position.Z)
+                        outDir = outDir.Magnitude > 0.01 and outDir.Unit or machRoot.CFrame.LookVector
+                        walkTarget = glassPart.Position + outDir * 2
+                        facePos    = glassPart.Position
+                    else
+                        walkTarget = getMachineFrontPos(machRoot, 2.5)
+                        facePos    = machRoot.Position
                     end
+
                     hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos) end
-                    VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-                    task.wait(0.1)
-                    VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-                    task.wait(0.7)
-                end
-                restoreMachineColors(savedColors)
-
-                if copStopped then
-                    if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
-                        mountVehicle(vehicle); task.wait(0.4)
+                    if hrp and (hrp.Position - machRoot.Position).Magnitude <= 20 then
+                        hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15)
+                    else
+                        microTeleport(walkTarget, statusLabel, {walkMode = true}); waitTpDone()
                     end
-                    continue
+                    if not autoVoleRunning then break end
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos); task.wait(0.15) end
+                    if not autoVoleRunning then break end
+
+                    statusLabel.Text = "Auto vole: tape distributeur..."
+                    local savedColors = highlightMachineRed(machine)
+                    local hitDeadline = tick() + 60
+                    local copStopped = false
+                    while autoVoleRunning and tick() < hitDeadline do
+                        if isVendingMachineEmpty(machine) then break end
+                        if isCopNearby(machRoot.Position, 60) then copStopped = true; break end
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(walkTarget, facePos) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game); task.wait(0.1)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game); task.wait(0.7)
+                    end
+                    restoreMachineColors(savedColors)
+
+                    if copStopped then
+                        if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
+                            mountVehicle(vehicle); task.wait(0.4)
+                        end
+                        continue
+                    end
+
+                    doneMachines[machine] = true
+                    task.wait(1.2)
+                    collectDropsNear(machRoot.Position, 80)
+
+                -- ── VITRINE BIJOUTERIE ────────────────────────────────────────
+                else
+                    local model    = nearest.model
+                    local jwCenter = nearest.pos
+                    local BIJOUTERIE_ENTRANCE = Vector3.new(-427.967, 21.395, 3555.956)
+                    local PRISON_POS          = Vector3.new(-604.927,  9.833, 3051.886)
+
+                    if isCopNearby(jwCenter, 200) then task.wait(1); continue end
+
+                    -- Garer le vehicule a l'entree de la bijouterie (pas sur la vitrine)
+                    statusLabel.Text = "Auto vole: bijouterie " .. model.Name .. "..."
+                    microTeleport(BIJOUTERIE_ENTRANCE, statusLabel, {wallPass = true})
+                    waitTpDone()
+                    if not autoVoleRunning then break end
+
+                    dismountChar(); task.wait(0.4)
+
+                    -- TP direct du joueur a cote de la vitrine
+                    -- Y = pivot du modele - 1.5 (ramene au sol depuis la surface de la vitrine)
+                    local modelCF  = model:GetPivot()
+                    local pivotPos = modelCF.Position
+                    -- Se placer devant la face avant du modele (LookVector = avant en Roblox)
+                    local fwd      = Vector3.new(modelCF.LookVector.X, 0, modelCF.LookVector.Z).Unit
+                    local standPos  = pivotPos + fwd * 2 + Vector3.new(0, -1.5, 0)
+                    local faceToward = pivotPos + Vector3.new(0, -1.5, 0)
+
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        hrp.CFrame = CFrame.new(standPos, faceToward)
+                        task.wait(0.2)
+                    end
+                    if not autoVoleRunning then break end
+
+                    -- Taper F jusqu'a ce que Broken = true
+                    statusLabel.Text = "Auto vole: casse vitrine " .. model.Name .. "..."
+                    local hitDeadline = tick() + 60
+                    local copFled = false
+                    while autoVoleRunning and tick() < hitDeadline do
+                        if model:GetAttribute("Broken") == true then break end
+                        if isCopNearby(jwCenter, 50) then copFled = true; break end
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(standPos, faceToward) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game); task.wait(0.1)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game); task.wait(0.7)
+                    end
+
+                    if copFled then
+                        statusLabel.Text = "Auto vole: fuite! TP prison..."
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(PRISON_POS) end
+                        task.wait(0.5)
+                        if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
+                            mountVehicle(vehicle); task.wait(0.4)
+                        end
+                        continue
+                    end
+
+                    -- Broken = true : E maintenu 5s relache, puis E maintenu 5s encore
+                    if autoVoleRunning and model:GetAttribute("Broken") == true then
+                        statusLabel.Text = "Auto vole: ramasse bijoux " .. model.Name .. "..."
+                        task.wait(0.3)
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(standPos, faceToward) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                        task.wait(5)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                        task.wait(0.3)
+                        hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = CFrame.new(standPos, faceToward) end
+                        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                        task.wait(5)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                        task.wait(0.3)
+                        -- Marquer cette vitrine comme faite (Broken confirme)
+                        doneJewelry[model] = true
+                    end
+                    -- Si Broken jamais passe a true (timeout ou mauvaise position)
+                    -- on ne marque PAS doneJewelry -> on retentera au prochain tour
                 end
 
-                doneMachines[machine] = true
-                task.wait(1.2)
-
-                collectDropsNear(machRoot.Position, 80)
-
-                -- Remonter dans le vehicule apres chaque distributeur
+                -- Remonter dans le vehicule apres chaque cible
                 if not isLocalPlayerSeatedInVehicle(vehicle) and autoVoleRunning then
                     statusLabel.Text = "Auto vole: retour vehicule..."
-                    mountVehicle(vehicle)
-                    task.wait(0.4)
+                    mountVehicle(vehicle); task.wait(0.4)
                     if not isLocalPlayerSeatedInVehicle(vehicle) then
                         statusLabel.Text = "Auto vole: echec montee, arret"
                         stopAutoVole() return
@@ -6854,6 +8161,12 @@ local function createMainUI()
     end, "🏧")
     autoVoleBtn.LayoutOrder = 5
 
+    local mbParams = makeMenuButton(t("menu_params"), Color3.fromRGB(45, 55, 85), function()
+        showScreen("params")
+    end)
+    mbParams.LayoutOrder = 6
+    tReg(mbParams, "menu_params")
+
     -- Indicateur de proximite : vert si un distributeur valide est a portee, rouge sinon
     task.spawn(function()
         local PROXIMITY = 150 -- studs
@@ -6884,18 +8197,26 @@ local function createMainUI()
     local mbRespawn = makeMenuButton(t("menu_respawn"), Color3.fromRGB(120, 35, 35), function()
         local char = player.Character
         if not char then return end
+
+        for _, attr in ipairs({"IsCuffed", "IsHeld"}) do
+            if char:GetAttribute(attr) then
+                char:SetAttribute(attr, false)
+            end
+        end
+
         local upperTorso = char:FindFirstChild("UpperTorso")
         if upperTorso then upperTorso:Destroy() end
+
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then hum.Health = 0 end
     end, "💀")
-    mbRespawn.LayoutOrder = 6
+    mbRespawn.LayoutOrder = 7
     tReg(mbRespawn, "menu_respawn")
 
     local mbDel = makeMenuButton(t("menu_delete"), Color3.fromRGB(130, 40, 40), function()
         destroyTeleportUI()
     end, "🗑")
-    mbDel.LayoutOrder = 7
+    mbDel.LayoutOrder = 8
     tReg(mbDel, "menu_delete")
 
     backBtn.MouseButton1Click:Connect(function()
@@ -7201,1102 +8522,6 @@ local function createOpenButton(mainGui)
     openBtn.BorderSizePixel = 0
     openBtn.Parent = openGui
     createRounded(openBtn, 10)
-
-    -- Bouton engrenage sous MOD
-    local gearBtn = Instance.new("TextButton")
-    gearBtn.Size = UDim2.new(0, 48, 0, 30)
-    gearBtn.Position = UDim2.new(0, 20, 0.5, 26)
-    gearBtn.BackgroundColor3 = Color3.fromRGB(55, 35, 95)
-    gearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    gearBtn.TextSize = 18
-    gearBtn.Font = Enum.Font.GothamBold
-    gearBtn.Text = "⚙"
-    gearBtn.BorderSizePixel = 0
-    gearBtn.Parent = openGui
-    createRounded(gearBtn, 8)
-
-    -- Panel keybind orbit (dans openGui = toujours visible)
-    local KB_Z = 5
-    local keybindPanel = Instance.new("ScrollingFrame")
-    keybindPanel.Size = UDim2.new(0, 376, 0, 520)
-    keybindPanel.Position = UDim2.new(0, 78, 0.5, -260)
-    keybindPanel.CanvasSize = UDim2.new(0, 0, 0, 800)
-    keybindPanel.ScrollingDirection = Enum.ScrollingDirection.Y
-    keybindPanel.ScrollBarThickness = 5
-    keybindPanel.ScrollBarImageColor3 = Color3.fromRGB(80, 90, 140)
-    keybindPanel.BackgroundColor3 = Color3.fromRGB(15, 18, 32)
-    keybindPanel.BorderSizePixel = 0
-    keybindPanel.Visible = false
-    keybindPanel.ZIndex = KB_Z
-    keybindPanel.Parent = openGui
-    createRounded(keybindPanel, 14)
-
-    local kbTitleBar = Instance.new("Frame")
-    kbTitleBar.Size = UDim2.new(1, 0, 0, 36)
-    kbTitleBar.BackgroundColor3 = Color3.fromRGB(55, 35, 95)
-    kbTitleBar.BorderSizePixel = 0
-    kbTitleBar.ZIndex = KB_Z
-    kbTitleBar.Parent = keybindPanel
-    createRounded(kbTitleBar, 14)
-
-    local kbTitleFix = Instance.new("Frame")
-    kbTitleFix.Size = UDim2.new(1, 0, 0.5, 0)
-    kbTitleFix.Position = UDim2.new(0, 0, 0.5, 0)
-    kbTitleFix.BackgroundColor3 = Color3.fromRGB(55, 35, 95)
-    kbTitleFix.BorderSizePixel = 0
-    kbTitleFix.ZIndex = KB_Z
-    kbTitleFix.Parent = kbTitleBar
-
-    local kbTitle = Instance.new("TextLabel")
-    kbTitle.Size = UDim2.new(1, -50, 1, 0)
-    kbTitle.Position = UDim2.new(0, 14, 0, 0)
-    kbTitle.BackgroundTransparency = 1
-    kbTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    kbTitle.TextSize = 13
-    kbTitle.Font = Enum.Font.GothamBold
-    tReg(kbTitle, "kb_title")
-    kbTitle.TextXAlignment = Enum.TextXAlignment.Left
-    kbTitle.ZIndex = KB_Z
-    kbTitle.Parent = kbTitleBar
-
-    local kbCloseBtn = Instance.new("TextButton")
-    kbCloseBtn.Size = UDim2.new(0, 32, 0, 32)
-    kbCloseBtn.Position = UDim2.new(1, -36, 0, 2)
-    kbCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-    kbCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    kbCloseBtn.TextSize = 15
-    kbCloseBtn.Font = Enum.Font.GothamBold
-    kbCloseBtn.Text = "✕"  -- icon, not translated
-    kbCloseBtn.BorderSizePixel = 0
-    kbCloseBtn.ZIndex = KB_Z
-    kbCloseBtn.Parent = kbTitleBar
-    createRounded(kbCloseBtn, 8)
-
-    local kbCapOuter = Instance.new("Frame")
-    kbCapOuter.Size = UDim2.new(0, 80, 0, 54)
-    kbCapOuter.Position = UDim2.new(0, 14, 0, 46)
-    kbCapOuter.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
-    kbCapOuter.BorderSizePixel = 0
-    kbCapOuter.ZIndex = KB_Z
-    kbCapOuter.Parent = keybindPanel
-    createRounded(kbCapOuter, 10)
-
-    local kbCapInner = Instance.new("Frame")
-    kbCapInner.Size = UDim2.new(1, -6, 1, -8)
-    kbCapInner.Position = UDim2.new(0, 3, 0, 3)
-    kbCapInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
-    kbCapInner.BorderSizePixel = 0
-    kbCapInner.ZIndex = KB_Z
-    kbCapInner.Parent = kbCapOuter
-    createRounded(kbCapInner, 8)
-
-    local kbCapLabel = Instance.new("TextLabel")
-    kbCapLabel.Size = UDim2.new(1, 0, 1, 0)
-    kbCapLabel.BackgroundTransparency = 1
-    kbCapLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
-    kbCapLabel.TextSize = 18
-    kbCapLabel.Font = Enum.Font.GothamBold
-    kbCapLabel.ZIndex = KB_Z
-    kbCapLabel.Parent = kbCapInner
-
-    local kbInfoLabel = Instance.new("TextLabel")
-    kbInfoLabel.Size = UDim2.new(1, -110, 0, 54)
-    kbInfoLabel.Position = UDim2.new(0, 104, 0, 46)
-    kbInfoLabel.BackgroundTransparency = 1
-    kbInfoLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
-    kbInfoLabel.TextSize = 12
-    kbInfoLabel.Font = Enum.Font.Gotham
-    kbInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbInfoLabel.TextWrapped = true
-    kbInfoLabel.ZIndex = KB_Z
-    kbInfoLabel.Parent = keybindPanel
-
-    local kbSep = Instance.new("Frame")
-    kbSep.Size = UDim2.new(1, -28, 0, 1)
-    kbSep.Position = UDim2.new(0, 14, 0, 110)
-    kbSep.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
-    kbSep.BorderSizePixel = 0
-    kbSep.ZIndex = KB_Z
-    kbSep.Parent = keybindPanel
-
-    local waitingForKey = false
-
-    local function setOrbitKey(keyCode)
-        state.orbitToggleKey = keyCode
-        local name = tostring(keyCode):gsub("Enum.KeyCode.", "")
-        kbCapLabel.Text = name
-        kbInfoLabel.Text = t("cv_apply_info")
-        kbInfoLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
-        kbCapOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-    end
-
-    local function enterListenMode()
-        waitingForKey = true
-        kbCapLabel.Text = "?"
-        kbCapOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
-        kbInfoLabel.Text = t("cv_listen")
-        kbInfoLabel.TextColor3 = Color3.fromRGB(255, 210, 60)
-    end
-
-
-    local kbCustomBtn = Instance.new("TextButton")
-    kbCustomBtn.Size = UDim2.new(0, 100, 0, 30)
-    kbCustomBtn.Position = UDim2.new(1, -114, 0, 46)
-    kbCustomBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
-    kbCustomBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
-    kbCustomBtn.TextSize = 11
-    kbCustomBtn.Font = Enum.Font.GothamBold
-    tReg(kbCustomBtn, "cv_other_key")
-    kbCustomBtn.BorderSizePixel = 0
-    kbCustomBtn.ZIndex = KB_Z
-    kbCustomBtn.Parent = keybindPanel
-    createRounded(kbCustomBtn, 8)
-
-    kbCustomBtn.MouseButton1Click:Connect(enterListenMode)
-
-    -- ---- Section studs Detectives Bizard ----
-    local kbSep2 = Instance.new("Frame")
-    kbSep2.Size = UDim2.new(1, -28, 0, 1)
-    kbSep2.Position = UDim2.new(0, 14, 0, 114)
-    kbSep2.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
-    kbSep2.BorderSizePixel = 0
-    kbSep2.ZIndex = KB_Z
-    kbSep2.Parent = keybindPanel
-
-    local kbStudsLabel = Instance.new("TextLabel")
-    kbStudsLabel.Size = UDim2.new(1, -28, 0, 16)
-    kbStudsLabel.Position = UDim2.new(0, 14, 0, 119)
-    kbStudsLabel.BackgroundTransparency = 1
-    kbStudsLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbStudsLabel.TextSize = 11
-    kbStudsLabel.Font = Enum.Font.Gotham
-    kbStudsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbStudsLabel.Text = "DET Detectives Bizard — studs"
-    kbStudsLabel.ZIndex = KB_Z
-    kbStudsLabel.Parent = keybindPanel
-
-    local kbStudsMinus = Instance.new("TextButton")
-    kbStudsMinus.Size = UDim2.new(0, 34, 0, 26)
-    kbStudsMinus.Position = UDim2.new(0, 14, 0, 138)
-    kbStudsMinus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbStudsMinus.TextColor3 = Color3.fromRGB(220, 220, 255)
-    kbStudsMinus.TextSize = 16
-    kbStudsMinus.Font = Enum.Font.GothamBold
-    kbStudsMinus.Text = "−"
-    kbStudsMinus.BorderSizePixel = 0
-    kbStudsMinus.ZIndex = KB_Z
-    kbStudsMinus.Parent = keybindPanel
-    createRounded(kbStudsMinus, 7)
-
-    local kbStudsVal = Instance.new("TextLabel")
-    kbStudsVal.Size = UDim2.new(0, 60, 0, 26)
-    kbStudsVal.Position = UDim2.new(0, 52, 0, 138)
-    kbStudsVal.BackgroundColor3 = Color3.fromRGB(22, 26, 46)
-    kbStudsVal.TextColor3 = Color3.fromRGB(255, 255, 255)
-    kbStudsVal.TextSize = 14
-    kbStudsVal.Font = Enum.Font.GothamBold
-    kbStudsVal.Text = tostring(state.mirrorStuds) .. " st"
-    kbStudsVal.BorderSizePixel = 0
-    kbStudsVal.ZIndex = KB_Z
-    kbStudsVal.Parent = keybindPanel
-    createRounded(kbStudsVal, 7)
-
-    local kbStudsPlus = Instance.new("TextButton")
-    kbStudsPlus.Size = UDim2.new(0, 34, 0, 26)
-    kbStudsPlus.Position = UDim2.new(0, 116, 0, 138)
-    kbStudsPlus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbStudsPlus.TextColor3 = Color3.fromRGB(220, 220, 255)
-    kbStudsPlus.TextSize = 16
-    kbStudsPlus.Font = Enum.Font.GothamBold
-    kbStudsPlus.Text = "+"
-    kbStudsPlus.BorderSizePixel = 0
-    kbStudsPlus.ZIndex = KB_Z
-    kbStudsPlus.Parent = keybindPanel
-    createRounded(kbStudsPlus, 7)
-
-    local function updateStudsDisplay()
-        kbStudsVal.Text = tostring(state.mirrorStuds) .. " st"
-    end
-
-    kbStudsMinus.MouseButton1Click:Connect(function()
-        state.mirrorStuds = math.max(6, state.mirrorStuds - 1)
-        updateStudsDisplay()
-    end)
-
-    kbStudsPlus.MouseButton1Click:Connect(function()
-        state.mirrorStuds = math.min(12, state.mirrorStuds + 1)
-        updateStudsDisplay()
-    end)
-
-    -- Separateur sons
-    local kbSoundSep = Instance.new("Frame")
-    kbSoundSep.Size = UDim2.new(1, -28, 0, 1)
-    kbSoundSep.Position = UDim2.new(0, 14, 0, 172)
-    kbSoundSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-    kbSoundSep.BorderSizePixel = 0
-    kbSoundSep.ZIndex = KB_Z
-    kbSoundSep.Parent = keybindPanel
-
-    -- Bouton toggle son des poneys
-    local kbPoneySndBtn = Instance.new("TextButton")
-    kbPoneySndBtn.Size = UDim2.new(1, -28, 0, 28)
-    kbPoneySndBtn.Position = UDim2.new(0, 14, 0, 180)
-    kbPoneySndBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbPoneySndBtn.TextColor3 = Color3.fromRGB(220, 220, 255)
-    kbPoneySndBtn.TextSize = 13
-    kbPoneySndBtn.Font = Enum.Font.GothamBold
-    kbPoneySndBtn.BorderSizePixel = 0
-    kbPoneySndBtn.ZIndex = KB_Z
-    kbPoneySndBtn.Parent = keybindPanel
-    createRounded(kbPoneySndBtn, 7)
-
-    local function updatePoneySndBtn()
-        kbPoneySndBtn.Text = state.poneySoundEnabled and t("kb_poney_snd_on") or t("kb_poney_snd_off")
-        kbPoneySndBtn.BackgroundColor3 = state.poneySoundEnabled
-            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
-    end
-    updatePoneySndBtn()
-
-    kbPoneySndBtn.MouseButton1Click:Connect(function()
-        state.poneySoundEnabled = not state.poneySoundEnabled
-        refreshPoneySounds()
-        updatePoneySndBtn()
-    end)
-
-    -- Bouton toggle sirene police
-    local kbPoliceSndBtn = Instance.new("TextButton")
-    kbPoliceSndBtn.Size = UDim2.new(1, -28, 0, 28)
-    kbPoliceSndBtn.Position = UDim2.new(0, 14, 0, 214)
-    kbPoliceSndBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbPoliceSndBtn.TextColor3 = Color3.fromRGB(220, 220, 255)
-    kbPoliceSndBtn.TextSize = 13
-    kbPoliceSndBtn.Font = Enum.Font.GothamBold
-    kbPoliceSndBtn.BorderSizePixel = 0
-    kbPoliceSndBtn.ZIndex = KB_Z
-    kbPoliceSndBtn.Parent = keybindPanel
-    createRounded(kbPoliceSndBtn, 7)
-
-    local function updatePoliceSndBtn()
-        kbPoliceSndBtn.Text = state.policeSoundEnabled and t("kb_police_snd_on") or t("kb_police_snd_off")
-        kbPoliceSndBtn.BackgroundColor3 = state.policeSoundEnabled
-            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
-    end
-    updatePoliceSndBtn()
-
-    kbPoliceSndBtn.MouseButton1Click:Connect(function()
-        state.policeSoundEnabled = not state.policeSoundEnabled
-        refreshPoliceSounds()
-        updatePoliceSndBtn()
-    end)
-
-    setOrbitKey(state.orbitToggleKey)
-
-    -- ---- Section touche accélération boost vitesse ----
-    local kbAccelSep = Instance.new("Frame")
-    kbAccelSep.Size = UDim2.new(1, -28, 0, 1)
-    kbAccelSep.Position = UDim2.new(0, 14, 0, 248)
-    kbAccelSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-    kbAccelSep.BorderSizePixel = 0
-    kbAccelSep.ZIndex = KB_Z
-    kbAccelSep.Parent = keybindPanel
-
-    local kbAccelLabel = Instance.new("TextLabel")
-    kbAccelLabel.Size = UDim2.new(1, -28, 0, 16)
-    kbAccelLabel.Position = UDim2.new(0, 14, 0, 254)
-    kbAccelLabel.BackgroundTransparency = 1
-    kbAccelLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbAccelLabel.TextSize = 11
-    kbAccelLabel.Font = Enum.Font.Gotham
-    kbAccelLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbAccelLabel.Text = t("kb_accel_label")
-    kbAccelLabel.ZIndex = KB_Z
-    kbAccelLabel.Parent = keybindPanel
-
-    local kbAccelKeyOuter = Instance.new("Frame")
-    kbAccelKeyOuter.Size = UDim2.new(0, 70, 0, 40)
-    kbAccelKeyOuter.Position = UDim2.new(0, 14, 0, 274)
-    kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
-    kbAccelKeyOuter.BorderSizePixel = 0
-    kbAccelKeyOuter.ZIndex = KB_Z
-    kbAccelKeyOuter.Parent = keybindPanel
-    createRounded(kbAccelKeyOuter, 8)
-
-    local kbAccelKeyInner = Instance.new("Frame")
-    kbAccelKeyInner.Size = UDim2.new(1, -6, 1, -6)
-    kbAccelKeyInner.Position = UDim2.new(0, 3, 0, 3)
-    kbAccelKeyInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
-    kbAccelKeyInner.BorderSizePixel = 0
-    kbAccelKeyInner.ZIndex = KB_Z
-    kbAccelKeyInner.Parent = kbAccelKeyOuter
-    createRounded(kbAccelKeyInner, 6)
-
-    local kbAccelKeyLabel = Instance.new("TextLabel")
-    kbAccelKeyLabel.Size = UDim2.new(1, 0, 1, 0)
-    kbAccelKeyLabel.BackgroundTransparency = 1
-    kbAccelKeyLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
-    kbAccelKeyLabel.TextSize = 16
-    kbAccelKeyLabel.Font = Enum.Font.GothamBold
-    kbAccelKeyLabel.ZIndex = KB_Z
-    kbAccelKeyLabel.Parent = kbAccelKeyInner
-
-    local kbAccelChangeBtn = Instance.new("TextButton")
-    kbAccelChangeBtn.Size = UDim2.new(0, 110, 0, 30)
-    kbAccelChangeBtn.Position = UDim2.new(0, 92, 0, 279)
-    kbAccelChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
-    kbAccelChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
-    kbAccelChangeBtn.TextSize = 11
-    kbAccelChangeBtn.Font = Enum.Font.GothamBold
-    kbAccelChangeBtn.Text = t("kb_accel_change")
-    kbAccelChangeBtn.BorderSizePixel = 0
-    kbAccelChangeBtn.ZIndex = KB_Z
-    kbAccelChangeBtn.Parent = keybindPanel
-    createRounded(kbAccelChangeBtn, 8)
-
-    local kbAccelStatusLabel = Instance.new("TextLabel")
-    kbAccelStatusLabel.Size = UDim2.new(0, 150, 0, 30)
-    kbAccelStatusLabel.Position = UDim2.new(0, 210, 0, 279)
-    kbAccelStatusLabel.BackgroundTransparency = 1
-    kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
-    kbAccelStatusLabel.TextSize = 11
-    kbAccelStatusLabel.Font = Enum.Font.Gotham
-    kbAccelStatusLabel.TextWrapped = true
-    kbAccelStatusLabel.ZIndex = KB_Z
-    kbAccelStatusLabel.Parent = keybindPanel
-
-    local waitingForAccelKey = false
-
-    local function setAccelKey(keyCode)
-        state.accelKey = keyCode
-        local name = tostring(keyCode):gsub("Enum%.KeyCode%.", "")
-        kbAccelKeyLabel.Text = name
-        kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-        kbAccelStatusLabel.Text = t("kb_accel_saved")
-        kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
-        waitingForAccelKey = false
-    end
-
-    setAccelKey(state.accelKey)
-
-    kbAccelChangeBtn.MouseButton1Click:Connect(function()
-        waitingForAccelKey = true
-        waitingForKey = false  -- desactive l'ecoute orbit si active
-        kbAccelKeyLabel.Text = "?"
-        kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
-        kbAccelStatusLabel.Text = t("kb_accel_listen")
-        kbAccelStatusLabel.TextColor3 = Color3.fromRGB(255, 210, 60)
-    end)
-
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not waitingForAccelKey then return end
-        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-        if input.KeyCode == Enum.KeyCode.Escape then
-            waitingForAccelKey = false
-            setAccelKey(state.accelKey)
-            return
-        end
-        setAccelKey(input.KeyCode)
-    end)
-
-    -- ---- Section toggles police notif & role badge ----
-    local kbToggleSep = Instance.new("Frame")
-    kbToggleSep.Size = UDim2.new(1, -28, 0, 1)
-    kbToggleSep.Position = UDim2.new(0, 14, 0, 324)
-    kbToggleSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-    kbToggleSep.BorderSizePixel = 0
-    kbToggleSep.ZIndex = KB_Z
-    kbToggleSep.Parent = keybindPanel
-
-    local kbToggleSepLabel = Instance.new("TextLabel")
-    kbToggleSepLabel.Size = UDim2.new(1, -28, 0, 14)
-    kbToggleSepLabel.Position = UDim2.new(0, 14, 0, 330)
-    kbToggleSepLabel.BackgroundTransparency = 1
-    kbToggleSepLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbToggleSepLabel.TextSize = 11
-    kbToggleSepLabel.Font = Enum.Font.Gotham
-    kbToggleSepLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbToggleSepLabel.Text = t("kb_hud_section")
-    kbToggleSepLabel.ZIndex = KB_Z
-    kbToggleSepLabel.Parent = keybindPanel
-
-    local kbPoliceNotifBtn = Instance.new("TextButton")
-    kbPoliceNotifBtn.Size = UDim2.new(1, -28, 0, 28)
-    kbPoliceNotifBtn.Position = UDim2.new(0, 14, 0, 348)
-    kbPoliceNotifBtn.TextSize = 13
-    kbPoliceNotifBtn.Font = Enum.Font.GothamBold
-    kbPoliceNotifBtn.BorderSizePixel = 0
-    kbPoliceNotifBtn.ZIndex = KB_Z
-    kbPoliceNotifBtn.Parent = keybindPanel
-    createRounded(kbPoliceNotifBtn, 7)
-
-    local kbRoleBtn = Instance.new("TextButton")
-    kbRoleBtn.Size = UDim2.new(1, -28, 0, 28)
-    kbRoleBtn.Position = UDim2.new(0, 14, 0, 382)
-    kbRoleBtn.TextSize = 13
-    kbRoleBtn.Font = Enum.Font.GothamBold
-    kbRoleBtn.BorderSizePixel = 0
-    kbRoleBtn.ZIndex = KB_Z
-    kbRoleBtn.Parent = keybindPanel
-    createRounded(kbRoleBtn, 7)
-
-    local function updatePoliceNotifBtn()
-        kbPoliceNotifBtn.Text = state.policeNotifEnabled
-            and t("kb_police_notif_on")
-            or  t("kb_police_notif_off")
-        kbPoliceNotifBtn.BackgroundColor3 = state.policeNotifEnabled
-            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
-        kbPoliceNotifBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
-    end
-
-    local function updateRoleBtn()
-        kbRoleBtn.Text = state.roleDisplayEnabled
-            and t("kb_role_badge_on")
-            or  t("kb_role_badge_off")
-        kbRoleBtn.BackgroundColor3 = state.roleDisplayEnabled
-            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
-        kbRoleBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
-    end
-
-    updatePoliceNotifBtn()
-    updateRoleBtn()
-
-    kbPoliceNotifBtn.MouseButton1Click:Connect(function()
-        state.policeNotifEnabled = not state.policeNotifEnabled
-        updatePoliceNotifBtn()
-    end)
-
-    kbRoleBtn.MouseButton1Click:Connect(function()
-        state.roleDisplayEnabled = not state.roleDisplayEnabled
-        updateRoleBtn()
-    end)
-
-    -- ---- Slider detection policier ----
-    local kbDistSep = Instance.new("Frame")
-    kbDistSep.Size = UDim2.new(1, -28, 0, 1)
-    kbDistSep.Position = UDim2.new(0, 14, 0, 418)
-    kbDistSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-    kbDistSep.BorderSizePixel = 0
-    kbDistSep.ZIndex = KB_Z
-    kbDistSep.Parent = keybindPanel
-
-    local kbDistLabel = Instance.new("TextLabel")
-    kbDistLabel.Size = UDim2.new(0, 220, 0, 14)
-    kbDistLabel.Position = UDim2.new(0, 14, 0, 425)
-    kbDistLabel.BackgroundTransparency = 1
-    kbDistLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbDistLabel.TextSize = 11
-    kbDistLabel.Font = Enum.Font.Gotham
-    kbDistLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbDistLabel.Text = t("kb_police_dist")
-    kbDistLabel.ZIndex = KB_Z
-    kbDistLabel.Parent = keybindPanel
-
-    local kbDistValLabel = Instance.new("TextLabel")
-    kbDistValLabel.Size = UDim2.new(0, 80, 0, 14)
-    kbDistValLabel.Position = UDim2.new(1, -94, 0, 425)
-    kbDistValLabel.BackgroundTransparency = 1
-    kbDistValLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
-    kbDistValLabel.TextSize = 11
-    kbDistValLabel.Font = Enum.Font.GothamBold
-    kbDistValLabel.TextXAlignment = Enum.TextXAlignment.Right
-    kbDistValLabel.Text = tostring(state.policeDetectDist) .. " m"
-    kbDistValLabel.ZIndex = KB_Z
-    kbDistValLabel.Parent = keybindPanel
-
-    -- Rail du slider
-    local kbDistTrack = Instance.new("Frame")
-    kbDistTrack.Size = UDim2.new(1, -28, 0, 8)
-    kbDistTrack.Position = UDim2.new(0, 14, 0, 445)
-    kbDistTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbDistTrack.BorderSizePixel = 0
-    kbDistTrack.ZIndex = KB_Z
-    kbDistTrack.Parent = keybindPanel
-    createRounded(kbDistTrack, 4)
-
-    local kbDistFill = Instance.new("Frame")
-    kbDistFill.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
-    kbDistFill.BorderSizePixel = 0
-    kbDistFill.ZIndex = KB_Z
-    kbDistFill.Parent = kbDistTrack
-    createRounded(kbDistFill, 4)
-
-    local kbDistHandle = Instance.new("TextButton")
-    kbDistHandle.Size = UDim2.new(0, 18, 0, 18)
-    kbDistHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    kbDistHandle.Text = ""
-    kbDistHandle.BorderSizePixel = 0
-    kbDistHandle.ZIndex = KB_Z + 1
-    kbDistHandle.Parent = kbDistTrack
-    createRounded(kbDistHandle, 9)
-
-    local DIST_MIN, DIST_MAX = 50, 500
-
-    local function updateDistSlider()
-        local pct = (state.policeDetectDist - DIST_MIN) / (DIST_MAX - DIST_MIN)
-        kbDistFill.Size = UDim2.new(pct, 0, 1, 0)
-        kbDistHandle.Position = UDim2.new(pct, -9, 0.5, -9)
-        kbDistValLabel.Text = tostring(state.policeDetectDist) .. " m"
-    end
-    updateDistSlider()
-
-    local draggingDist = false
-    kbDistHandle.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            draggingDist = true
-            keybindPanel.ScrollingEnabled = false
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            draggingDist = false
-            keybindPanel.ScrollingEnabled = true
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if not draggingDist then return end
-        if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-        local trackPos = kbDistTrack.AbsolutePosition
-        local trackSize = kbDistTrack.AbsoluteSize
-        local relX = math.clamp(inp.Position.X - trackPos.X, 0, trackSize.X)
-        local pct = relX / trackSize.X
-        local raw = DIST_MIN + pct * (DIST_MAX - DIST_MIN)
-        state.policeDetectDist = math.floor(raw / 10 + 0.5) * 10  -- snap 10m
-        updateDistSlider()
-    end)
-
-    -- ---- Toggle simulation vehicule ----
-    local kbVehSimSep = Instance.new("Frame")
-    kbVehSimSep.Size = UDim2.new(1, -28, 0, 1)
-    kbVehSimSep.Position = UDim2.new(0, 14, 0, 464)
-    kbVehSimSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-    kbVehSimSep.BorderSizePixel = 0
-    kbVehSimSep.ZIndex = KB_Z
-    kbVehSimSep.Parent = keybindPanel
-
-    local kbVehSimBtn = Instance.new("TextButton")
-    kbVehSimBtn.Size = UDim2.new(1, -28, 0, 28)
-    kbVehSimBtn.Position = UDim2.new(0, 14, 0, 472)
-    kbVehSimBtn.TextSize = 13
-    kbVehSimBtn.Font = Enum.Font.GothamBold
-    kbVehSimBtn.BorderSizePixel = 0
-    kbVehSimBtn.ZIndex = KB_Z
-    kbVehSimBtn.Parent = keybindPanel
-    createRounded(kbVehSimBtn, 7)
-
-    local function updateVehSimBtn()
-        if state.vehSimEnabled then
-            -- Verifier si le vehicule du joueur a le contact ON (sim inutile)
-            local char = player.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local seat = hum and hum.SeatPart
-            local vehModel = seat and seat:FindFirstAncestorOfClass("Model")
-            local contactOn = vehModel and vehModel:GetAttribute("IsOn")
-            if contactOn then
-                kbVehSimBtn.Text = t("kb_vehsim_contact_on")
-                kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(160, 50, 20)
-                kbVehSimBtn.TextColor3 = Color3.fromRGB(255, 200, 180)
-                return
-            end
-            kbVehSimBtn.Text = t("kb_vehsim_on")
-            kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 50)
-        else
-            kbVehSimBtn.Text = t("kb_vehsim_off")
-            kbVehSimBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-        end
-        kbVehSimBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
-    end
-    updateVehSimBtn()
-
-    -- Mise a jour periodique du bouton (detecte changement IsOn)
-    task.spawn(function()
-        while keybindPanel.Parent do
-            task.wait(0.5)
-            if state.vehSimEnabled then updateVehSimBtn() end
-        end
-    end)
-
-    kbVehSimBtn.MouseButton1Click:Connect(function()
-        state.vehSimEnabled = not state.vehSimEnabled
-        if not state.vehSimEnabled then
-            -- Reset attributs et donnees quand on desactive
-            local vehiclesFolder = workspace:FindFirstChild("Vehicles")
-            if vehiclesFolder then
-                for _, veh in ipairs(vehiclesFolder:GetChildren()) do
-                    if veh:IsA("Model") and not veh:GetAttribute("IsOn") then
-                        pcall(function() veh:SetAttribute("Throttle", 0) end)
-                        pcall(function() veh:SetAttribute("Steering", 0) end)
-                    end
-                end
-            end
-            vehSimData = {}
-        end
-        updateVehSimBtn()
-    end)
-
-    -- ---- Controles Sim Vehicule (touches + vitesses) ----
-    local kbSimCtrlSep = Instance.new("Frame")
-    kbSimCtrlSep.Size = UDim2.new(1, -28, 0, 1)
-    kbSimCtrlSep.Position = UDim2.new(0, 14, 0, 504)
-    kbSimCtrlSep.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
-    kbSimCtrlSep.BorderSizePixel = 0
-    kbSimCtrlSep.ZIndex = KB_Z
-    kbSimCtrlSep.Parent = keybindPanel
-
-    -- Touche avancer
-    local kbSimFwdLabel = Instance.new("TextLabel")
-    kbSimFwdLabel.Size = UDim2.new(1, -28, 0, 14)
-    kbSimFwdLabel.Position = UDim2.new(0, 14, 0, 510)
-    kbSimFwdLabel.BackgroundTransparency = 1
-    kbSimFwdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbSimFwdLabel.TextSize = 11
-    kbSimFwdLabel.Font = Enum.Font.Gotham
-    kbSimFwdLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbSimFwdLabel.Text = t("kb_sim_fwd_label")
-    kbSimFwdLabel.ZIndex = KB_Z
-    kbSimFwdLabel.Parent = keybindPanel
-
-    local kbSimFwdOuter = Instance.new("Frame")
-    kbSimFwdOuter.Size = UDim2.new(0, 50, 0, 32)
-    kbSimFwdOuter.Position = UDim2.new(0, 14, 0, 526)
-    kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
-    kbSimFwdOuter.BorderSizePixel = 0
-    kbSimFwdOuter.ZIndex = KB_Z
-    kbSimFwdOuter.Parent = keybindPanel
-    createRounded(kbSimFwdOuter, 7)
-
-    local kbSimFwdInner = Instance.new("Frame")
-    kbSimFwdInner.Size = UDim2.new(1, -6, 1, -6)
-    kbSimFwdInner.Position = UDim2.new(0, 3, 0, 3)
-    kbSimFwdInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
-    kbSimFwdInner.BorderSizePixel = 0
-    kbSimFwdInner.ZIndex = KB_Z
-    kbSimFwdInner.Parent = kbSimFwdOuter
-    createRounded(kbSimFwdInner, 5)
-
-    local kbSimFwdKeyLabel = Instance.new("TextLabel")
-    kbSimFwdKeyLabel.Size = UDim2.new(1, 0, 1, 0)
-    kbSimFwdKeyLabel.BackgroundTransparency = 1
-    kbSimFwdKeyLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
-    kbSimFwdKeyLabel.TextSize = 14
-    kbSimFwdKeyLabel.Font = Enum.Font.GothamBold
-    kbSimFwdKeyLabel.ZIndex = KB_Z
-    kbSimFwdKeyLabel.Parent = kbSimFwdInner
-
-    local kbSimFwdChangeBtn = Instance.new("TextButton")
-    kbSimFwdChangeBtn.Size = UDim2.new(0, 100, 0, 26)
-    kbSimFwdChangeBtn.Position = UDim2.new(0, 70, 0, 529)
-    kbSimFwdChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
-    kbSimFwdChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
-    kbSimFwdChangeBtn.TextSize = 11
-    kbSimFwdChangeBtn.Font = Enum.Font.GothamBold
-    kbSimFwdChangeBtn.Text = "CHANGER TOUCHE"
-    kbSimFwdChangeBtn.BorderSizePixel = 0
-    kbSimFwdChangeBtn.ZIndex = KB_Z
-    kbSimFwdChangeBtn.Parent = keybindPanel
-    createRounded(kbSimFwdChangeBtn, 7)
-
-    local kbSimFwdStatus = Instance.new("TextLabel")
-    kbSimFwdStatus.Size = UDim2.new(0, 120, 0, 26)
-    kbSimFwdStatus.Position = UDim2.new(0, 176, 0, 529)
-    kbSimFwdStatus.BackgroundTransparency = 1
-    kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
-    kbSimFwdStatus.TextSize = 11
-    kbSimFwdStatus.Font = Enum.Font.Gotham
-    kbSimFwdStatus.TextWrapped = true
-    kbSimFwdStatus.ZIndex = KB_Z
-    kbSimFwdStatus.Parent = keybindPanel
-
-    -- Touche reculer
-    local kbSimRevLabel = Instance.new("TextLabel")
-    kbSimRevLabel.Size = UDim2.new(1, -28, 0, 14)
-    kbSimRevLabel.Position = UDim2.new(0, 14, 0, 564)
-    kbSimRevLabel.BackgroundTransparency = 1
-    kbSimRevLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbSimRevLabel.TextSize = 11
-    kbSimRevLabel.Font = Enum.Font.Gotham
-    kbSimRevLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbSimRevLabel.Text = t("kb_sim_rev_label")
-    kbSimRevLabel.ZIndex = KB_Z
-    kbSimRevLabel.Parent = keybindPanel
-
-    local kbSimRevOuter = Instance.new("Frame")
-    kbSimRevOuter.Size = UDim2.new(0, 50, 0, 32)
-    kbSimRevOuter.Position = UDim2.new(0, 14, 0, 580)
-    kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
-    kbSimRevOuter.BorderSizePixel = 0
-    kbSimRevOuter.ZIndex = KB_Z
-    kbSimRevOuter.Parent = keybindPanel
-    createRounded(kbSimRevOuter, 7)
-
-    local kbSimRevInner = Instance.new("Frame")
-    kbSimRevInner.Size = UDim2.new(1, -6, 1, -6)
-    kbSimRevInner.Position = UDim2.new(0, 3, 0, 3)
-    kbSimRevInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
-    kbSimRevInner.BorderSizePixel = 0
-    kbSimRevInner.ZIndex = KB_Z
-    kbSimRevInner.Parent = kbSimRevOuter
-    createRounded(kbSimRevInner, 5)
-
-    local kbSimRevKeyLabel = Instance.new("TextLabel")
-    kbSimRevKeyLabel.Size = UDim2.new(1, 0, 1, 0)
-    kbSimRevKeyLabel.BackgroundTransparency = 1
-    kbSimRevKeyLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
-    kbSimRevKeyLabel.TextSize = 14
-    kbSimRevKeyLabel.Font = Enum.Font.GothamBold
-    kbSimRevKeyLabel.ZIndex = KB_Z
-    kbSimRevKeyLabel.Parent = kbSimRevInner
-
-    local kbSimRevChangeBtn = Instance.new("TextButton")
-    kbSimRevChangeBtn.Size = UDim2.new(0, 100, 0, 26)
-    kbSimRevChangeBtn.Position = UDim2.new(0, 70, 0, 583)
-    kbSimRevChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
-    kbSimRevChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
-    kbSimRevChangeBtn.TextSize = 11
-    kbSimRevChangeBtn.Font = Enum.Font.GothamBold
-    kbSimRevChangeBtn.Text = "CHANGER TOUCHE"
-    kbSimRevChangeBtn.BorderSizePixel = 0
-    kbSimRevChangeBtn.ZIndex = KB_Z
-    kbSimRevChangeBtn.Parent = keybindPanel
-    createRounded(kbSimRevChangeBtn, 7)
-
-    local kbSimRevStatus = Instance.new("TextLabel")
-    kbSimRevStatus.Size = UDim2.new(0, 120, 0, 26)
-    kbSimRevStatus.Position = UDim2.new(0, 176, 0, 583)
-    kbSimRevStatus.BackgroundTransparency = 1
-    kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
-    kbSimRevStatus.TextSize = 11
-    kbSimRevStatus.Font = Enum.Font.Gotham
-    kbSimRevStatus.TextWrapped = true
-    kbSimRevStatus.ZIndex = KB_Z
-    kbSimRevStatus.Parent = keybindPanel
-
-    -- Logique key listeners sim
-    local waitingSimFwd, waitingSimRev = false, false
-
-    local function setSimFwdKey(kc)
-        state.simFwdKey = kc
-        kbSimFwdKeyLabel.Text = tostring(kc):gsub("Enum%.KeyCode%.", "")
-        kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-        kbSimFwdStatus.Text = "Sauvegarde !"
-        kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
-        waitingSimFwd = false
-    end
-
-    local function setSimRevKey(kc)
-        state.simRevKey = kc
-        kbSimRevKeyLabel.Text = tostring(kc):gsub("Enum%.KeyCode%.", "")
-        kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-        kbSimRevStatus.Text = "Sauvegarde !"
-        kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
-        waitingSimRev = false
-    end
-
-    setSimFwdKey(state.simFwdKey)
-    setSimRevKey(state.simRevKey)
-
-    kbSimFwdChangeBtn.MouseButton1Click:Connect(function()
-        waitingSimFwd = true
-        waitingSimRev = false
-        kbSimFwdKeyLabel.Text = "?"
-        kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
-        kbSimFwdStatus.Text = "Appuie une touche..."
-        kbSimFwdStatus.TextColor3 = Color3.fromRGB(255, 210, 60)
-    end)
-
-    kbSimRevChangeBtn.MouseButton1Click:Connect(function()
-        waitingSimRev = true
-        waitingSimFwd = false
-        kbSimRevKeyLabel.Text = "?"
-        kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
-        kbSimRevStatus.Text = "Appuie une touche..."
-        kbSimRevStatus.TextColor3 = Color3.fromRGB(255, 210, 60)
-    end)
-
-    UserInputService.InputBegan:Connect(function(input, _gp)
-        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-        if input.KeyCode == Enum.KeyCode.Escape then
-            if waitingSimFwd then setSimFwdKey(state.simFwdKey) end
-            if waitingSimRev then setSimRevKey(state.simRevKey) end
-            return
-        end
-        if waitingSimFwd then setSimFwdKey(input.KeyCode) return end
-        if waitingSimRev then setSimRevKey(input.KeyCode) return end
-    end)
-
-    -- Sliders vitesses sim
-    local kbSimSpeedSep = Instance.new("Frame")
-    kbSimSpeedSep.Size = UDim2.new(1, -28, 0, 1)
-    kbSimSpeedSep.Position = UDim2.new(0, 14, 0, 620)
-    kbSimSpeedSep.BackgroundColor3 = Color3.fromRGB(50, 55, 80)
-    kbSimSpeedSep.BorderSizePixel = 0
-    kbSimSpeedSep.ZIndex = KB_Z
-    kbSimSpeedSep.Parent = keybindPanel
-
-    -- Slider vitesse max avancer
-    local kbSimFwdSpdLabel = Instance.new("TextLabel")
-    kbSimFwdSpdLabel.Size = UDim2.new(0, 220, 0, 14)
-    kbSimFwdSpdLabel.Position = UDim2.new(0, 14, 0, 626)
-    kbSimFwdSpdLabel.BackgroundTransparency = 1
-    kbSimFwdSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbSimFwdSpdLabel.TextSize = 11
-    kbSimFwdSpdLabel.Font = Enum.Font.Gotham
-    kbSimFwdSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbSimFwdSpdLabel.Text = t("kb_sim_speed_fwd")
-    kbSimFwdSpdLabel.ZIndex = KB_Z
-    kbSimFwdSpdLabel.Parent = keybindPanel
-
-    local kbSimFwdSpdVal = Instance.new("TextLabel")
-    kbSimFwdSpdVal.Size = UDim2.new(0, 60, 0, 14)
-    kbSimFwdSpdVal.Position = UDim2.new(1, -74, 0, 626)
-    kbSimFwdSpdVal.BackgroundTransparency = 1
-    kbSimFwdSpdVal.TextColor3 = Color3.fromRGB(0, 200, 255)
-    kbSimFwdSpdVal.TextSize = 11
-    kbSimFwdSpdVal.Font = Enum.Font.GothamBold
-    kbSimFwdSpdVal.TextXAlignment = Enum.TextXAlignment.Right
-    kbSimFwdSpdVal.ZIndex = KB_Z
-    kbSimFwdSpdVal.Parent = keybindPanel
-
-    local kbSimFwdSpdTrack = Instance.new("Frame")
-    kbSimFwdSpdTrack.Size = UDim2.new(1, -28, 0, 8)
-    kbSimFwdSpdTrack.Position = UDim2.new(0, 14, 0, 642)
-    kbSimFwdSpdTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbSimFwdSpdTrack.BorderSizePixel = 0
-    kbSimFwdSpdTrack.ZIndex = KB_Z
-    kbSimFwdSpdTrack.Parent = keybindPanel
-    createRounded(kbSimFwdSpdTrack, 4)
-
-    local kbSimFwdSpdFill = Instance.new("Frame")
-    kbSimFwdSpdFill.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
-    kbSimFwdSpdFill.BorderSizePixel = 0
-    kbSimFwdSpdFill.ZIndex = KB_Z
-    kbSimFwdSpdFill.Parent = kbSimFwdSpdTrack
-    createRounded(kbSimFwdSpdFill, 4)
-
-    local kbSimFwdSpdHandle = Instance.new("TextButton")
-    kbSimFwdSpdHandle.Size = UDim2.new(0, 18, 0, 18)
-    kbSimFwdSpdHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    kbSimFwdSpdHandle.Text = ""
-    kbSimFwdSpdHandle.BorderSizePixel = 0
-    kbSimFwdSpdHandle.ZIndex = KB_Z + 1
-    kbSimFwdSpdHandle.Parent = kbSimFwdSpdTrack
-    createRounded(kbSimFwdSpdHandle, 9)
-
-    -- Slider vitesse max reculer
-    local kbSimRevSpdLabel = Instance.new("TextLabel")
-    kbSimRevSpdLabel.Size = UDim2.new(0, 220, 0, 14)
-    kbSimRevSpdLabel.Position = UDim2.new(0, 14, 0, 658)
-    kbSimRevSpdLabel.BackgroundTransparency = 1
-    kbSimRevSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbSimRevSpdLabel.TextSize = 11
-    kbSimRevSpdLabel.Font = Enum.Font.Gotham
-    kbSimRevSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbSimRevSpdLabel.Text = t("kb_sim_speed_rev")
-    kbSimRevSpdLabel.ZIndex = KB_Z
-    kbSimRevSpdLabel.Parent = keybindPanel
-
-    local kbSimRevSpdVal = Instance.new("TextLabel")
-    kbSimRevSpdVal.Size = UDim2.new(0, 60, 0, 14)
-    kbSimRevSpdVal.Position = UDim2.new(1, -74, 0, 658)
-    kbSimRevSpdVal.BackgroundTransparency = 1
-    kbSimRevSpdVal.TextColor3 = Color3.fromRGB(0, 200, 255)
-    kbSimRevSpdVal.TextSize = 11
-    kbSimRevSpdVal.Font = Enum.Font.GothamBold
-    kbSimRevSpdVal.TextXAlignment = Enum.TextXAlignment.Right
-    kbSimRevSpdVal.ZIndex = KB_Z
-    kbSimRevSpdVal.Parent = keybindPanel
-
-    local kbSimRevSpdTrack = Instance.new("Frame")
-    kbSimRevSpdTrack.Size = UDim2.new(1, -28, 0, 8)
-    kbSimRevSpdTrack.Position = UDim2.new(0, 14, 0, 674)
-    kbSimRevSpdTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbSimRevSpdTrack.BorderSizePixel = 0
-    kbSimRevSpdTrack.ZIndex = KB_Z
-    kbSimRevSpdTrack.Parent = keybindPanel
-    createRounded(kbSimRevSpdTrack, 4)
-
-    local kbSimRevSpdFill = Instance.new("Frame")
-    kbSimRevSpdFill.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
-    kbSimRevSpdFill.BorderSizePixel = 0
-    kbSimRevSpdFill.ZIndex = KB_Z
-    kbSimRevSpdFill.Parent = kbSimRevSpdTrack
-    createRounded(kbSimRevSpdFill, 4)
-
-    local kbSimRevSpdHandle = Instance.new("TextButton")
-    kbSimRevSpdHandle.Size = UDim2.new(0, 18, 0, 18)
-    kbSimRevSpdHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    kbSimRevSpdHandle.Text = ""
-    kbSimRevSpdHandle.BorderSizePixel = 0
-    kbSimRevSpdHandle.ZIndex = KB_Z + 1
-    kbSimRevSpdHandle.Parent = kbSimRevSpdTrack
-    createRounded(kbSimRevSpdHandle, 9)
-
-    -- Logique sliders sim
-    local SIM_FWD_MIN, SIM_FWD_MAX = 10, 200
-    local SIM_REV_MIN, SIM_REV_MAX = 5,  80
-
-    local function updateSimFwdSlider()
-        local pct = (state.simMaxFwd - SIM_FWD_MIN) / (SIM_FWD_MAX - SIM_FWD_MIN)
-        kbSimFwdSpdFill.Size = UDim2.new(pct, 0, 1, 0)
-        kbSimFwdSpdHandle.Position = UDim2.new(pct, -9, 0.5, -9)
-        kbSimFwdSpdVal.Text = tostring(state.simMaxFwd)
-    end
-
-    local function updateSimRevSlider()
-        local pct = (state.simMaxRev - SIM_REV_MIN) / (SIM_REV_MAX - SIM_REV_MIN)
-        kbSimRevSpdFill.Size = UDim2.new(pct, 0, 1, 0)
-        kbSimRevSpdHandle.Position = UDim2.new(pct, -9, 0.5, -9)
-        kbSimRevSpdVal.Text = tostring(state.simMaxRev)
-    end
-
-    updateSimFwdSlider()
-    updateSimRevSlider()
-
-    local draggingSimFwd, draggingSimRev, draggingSimAccel = false, false, false
-    local SIM_ACCEL_MIN, SIM_ACCEL_MAX = 5, 120
-
-    local function startDrag(which)
-        draggingSimFwd   = which == "fwd"
-        draggingSimRev   = which == "rev"
-        draggingSimAccel = which == "accel"
-        keybindPanel.ScrollingEnabled = false  -- empeche le ScrollingFrame de voler l'input
-    end
-
-    local function stopDrag()
-        draggingSimFwd = false
-        draggingSimRev = false
-        draggingSimAccel = false
-        keybindPanel.ScrollingEnabled = true
-    end
-
-    kbSimFwdSpdHandle.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then startDrag("fwd") end
-    end)
-    kbSimRevSpdHandle.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then startDrag("rev") end
-    end)
-
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then stopDrag() end
-    end)
-
-    UserInputService.InputChanged:Connect(function(inp)
-        if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-        if draggingSimFwd then
-            local tp = kbSimFwdSpdTrack.AbsolutePosition
-            local ts = kbSimFwdSpdTrack.AbsoluteSize
-            local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
-            state.simMaxFwd = math.floor(SIM_FWD_MIN + pct * (SIM_FWD_MAX - SIM_FWD_MIN) + 0.5)
-            updateSimFwdSlider()
-        elseif draggingSimRev then
-            local tp = kbSimRevSpdTrack.AbsolutePosition
-            local ts = kbSimRevSpdTrack.AbsoluteSize
-            local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
-            state.simMaxRev = math.floor(SIM_REV_MIN + pct * (SIM_REV_MAX - SIM_REV_MIN) + 0.5)
-            updateSimRevSlider()
-        end
-    end)
-
-    -- Slider acceleration
-    local kbSimAccelLabel = Instance.new("TextLabel")
-    kbSimAccelLabel.Size = UDim2.new(0, 220, 0, 14)
-    kbSimAccelLabel.Position = UDim2.new(0, 14, 0, 690)
-    kbSimAccelLabel.BackgroundTransparency = 1
-    kbSimAccelLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
-    kbSimAccelLabel.TextSize = 11
-    kbSimAccelLabel.Font = Enum.Font.Gotham
-    kbSimAccelLabel.TextXAlignment = Enum.TextXAlignment.Left
-    kbSimAccelLabel.Text = t("kb_sim_accel_label")
-    kbSimAccelLabel.ZIndex = KB_Z
-    kbSimAccelLabel.Parent = keybindPanel
-
-    local kbSimAccelVal = Instance.new("TextLabel")
-    kbSimAccelVal.Size = UDim2.new(0, 60, 0, 14)
-    kbSimAccelVal.Position = UDim2.new(1, -74, 0, 690)
-    kbSimAccelVal.BackgroundTransparency = 1
-    kbSimAccelVal.TextColor3 = Color3.fromRGB(0, 200, 255)
-    kbSimAccelVal.TextSize = 11
-    kbSimAccelVal.Font = Enum.Font.GothamBold
-    kbSimAccelVal.TextXAlignment = Enum.TextXAlignment.Right
-    kbSimAccelVal.ZIndex = KB_Z
-    kbSimAccelVal.Parent = keybindPanel
-
-    local kbSimAccelTrack = Instance.new("Frame")
-    kbSimAccelTrack.Size = UDim2.new(1, -28, 0, 8)
-    kbSimAccelTrack.Position = UDim2.new(0, 14, 0, 706)
-    kbSimAccelTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
-    kbSimAccelTrack.BorderSizePixel = 0
-    kbSimAccelTrack.ZIndex = KB_Z
-    kbSimAccelTrack.Parent = keybindPanel
-    createRounded(kbSimAccelTrack, 4)
-
-    local kbSimAccelFill = Instance.new("Frame")
-    kbSimAccelFill.BackgroundColor3 = Color3.fromRGB(200, 140, 0)
-    kbSimAccelFill.BorderSizePixel = 0
-    kbSimAccelFill.ZIndex = KB_Z
-    kbSimAccelFill.Parent = kbSimAccelTrack
-    createRounded(kbSimAccelFill, 4)
-
-    local kbSimAccelHandle = Instance.new("TextButton")
-    kbSimAccelHandle.Size = UDim2.new(0, 18, 0, 18)
-    kbSimAccelHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    kbSimAccelHandle.Text = ""
-    kbSimAccelHandle.BorderSizePixel = 0
-    kbSimAccelHandle.ZIndex = KB_Z + 1
-    kbSimAccelHandle.Parent = kbSimAccelTrack
-    createRounded(kbSimAccelHandle, 9)
-
-    local function updateSimAccelSlider()
-        local pct = (state.simAccel - SIM_ACCEL_MIN) / (SIM_ACCEL_MAX - SIM_ACCEL_MIN)
-        kbSimAccelFill.Size = UDim2.new(pct, 0, 1, 0)
-        kbSimAccelHandle.Position = UDim2.new(pct, -9, 0.5, -9)
-        kbSimAccelVal.Text = tostring(state.simAccel)
-    end
-    updateSimAccelSlider()
-
-    kbSimAccelHandle.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then startDrag("accel") end
-    end)
-
-    UserInputService.InputChanged:Connect(function(inp)
-        if not draggingSimAccel then return end
-        if inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-        local tp = kbSimAccelTrack.AbsolutePosition
-        local ts = kbSimAccelTrack.AbsoluteSize
-        local pct = math.clamp((inp.Position.X - tp.X) / ts.X, 0, 1)
-        state.simAccel = math.floor(SIM_ACCEL_MIN + pct * (SIM_ACCEL_MAX - SIM_ACCEL_MIN) + 0.5)
-        updateSimAccelSlider()
-    end)
-
-    -- ---- Toggle panel occupants vehicule ----
-    local kbOccSep = Instance.new("Frame")
-    kbOccSep.Size = UDim2.new(1, -28, 0, 1)
-    kbOccSep.Position = UDim2.new(0, 14, 0, 730)
-    kbOccSep.BackgroundColor3 = Color3.fromRGB(60, 65, 100)
-    kbOccSep.BorderSizePixel = 0
-    kbOccSep.ZIndex = KB_Z
-    kbOccSep.Parent = keybindPanel
-
-    local kbOccBtn = Instance.new("TextButton")
-    kbOccBtn.Size = UDim2.new(1, -28, 0, 28)
-    kbOccBtn.Position = UDim2.new(0, 14, 0, 738)
-    kbOccBtn.TextSize = 13
-    kbOccBtn.Font = Enum.Font.GothamBold
-    kbOccBtn.BorderSizePixel = 0
-    kbOccBtn.ZIndex = KB_Z
-    kbOccBtn.Parent = keybindPanel
-    createRounded(kbOccBtn, 7)
-
-    local function updateOccBtn()
-        kbOccBtn.Text = state.occPanelEnabled and t("kb_occ_panel_on") or t("kb_occ_panel_off")
-        kbOccBtn.BackgroundColor3 = state.occPanelEnabled
-            and Color3.fromRGB(30, 80, 50) or Color3.fromRGB(80, 30, 30)
-        kbOccBtn.TextColor3 = Color3.fromRGB(220, 255, 220)
-    end
-    updateOccBtn()
-
-    kbOccBtn.MouseButton1Click:Connect(function()
-        state.occPanelEnabled = not state.occPanelEnabled
-        updateOccBtn()
-    end)
 
     -- ===== PANNEAU OCCUPANTS VEHICLE (persistant, toujours visible, togglable) =====
     local occPanel = Instance.new("Frame")
@@ -8621,36 +8846,230 @@ local function createOpenButton(mainGui)
         end
     end)
 
-    kbCloseBtn.MouseButton1Click:Connect(function()
-        waitingForKey = false
-        keybindPanel.Visible = false
-    end)
-
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not waitingForKey then return end
-        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-        if input.KeyCode == Enum.KeyCode.Escape then
-            waitingForKey = false
-            setOrbitKey(state.orbitToggleKey)
-            return
-        end
-        waitingForKey = false
-        setOrbitKey(input.KeyCode)
-    end)
-
-    gearBtn.MouseButton1Click:Connect(function()
-        keybindPanel.Visible = not keybindPanel.Visible
-        if keybindPanel.Visible then
-            setOrbitKey(state.orbitToggleKey)
-        else
-            waitingForKey = false
-        end
-    end)
-
     openBtn.MouseButton1Click:Connect(function()
         if mainGui then
             mainGui.Enabled = not mainGui.Enabled
         end
+    end)
+
+    -- ===== BOUTON SEAT (proximite vehicule) =====
+    local seatBtn = Instance.new("TextButton")
+    seatBtn.Name = "SeatBtn"
+    seatBtn.Size = UDim2.new(0, 60, 0, 30)
+    seatBtn.Position = UDim2.new(0, 20, 0.5, 28)
+    seatBtn.BackgroundColor3 = Color3.fromRGB(30, 130, 60)
+    seatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    seatBtn.TextSize = 13
+    seatBtn.Font = Enum.Font.GothamBold
+    seatBtn.Text = "🚗 SEAT"
+    seatBtn.BorderSizePixel = 0
+    seatBtn.Visible = false
+    seatBtn.Parent = openGui
+    createRounded(seatBtn, 8)
+
+    -- Trouve le vehicule du joueur (workspace.Vehicles.[player.Name]) dans un rayon de 40 studs
+    local function findNearbyVehicle()
+        local char = player.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil end
+
+        local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+        if not vehiclesFolder then return nil end
+
+        -- Cherche uniquement le vehicule nomme d'apres le joueur
+        local veh = vehiclesFolder:FindFirstChild(player.Name)
+        if not veh or not veh:IsA("Model") then return nil end
+
+        -- Ignore si deja assis dedans
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.SeatPart and hum.SeatPart:IsDescendantOf(veh) then return nil end
+
+        local seat = veh:FindFirstChild("DriveSeat", true)
+            or veh:FindFirstChildWhichIsA("VehicleSeat", true)
+            or veh:FindFirstChildWhichIsA("Seat", true)
+        if not seat then return nil end
+
+        local d = (seat.Position - hrp.Position).Magnitude
+        return d <= 40 and veh or nil
+    end
+
+    -- Monte dans le vehicule : TP HRP au-dessus du siege + touche E
+    local function sitInVehicle(veh)
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum then return end
+
+        local driveSeat = veh:FindFirstChild("DriveSeat", true)
+            or veh:FindFirstChildWhichIsA("VehicleSeat", true)
+            or veh:FindFirstChildWhichIsA("Seat", true)
+        if not driveSeat then return end
+
+        hrp.CFrame = CFrame.new(
+            driveSeat.Position + Vector3.new(0, 2, 0),
+            driveSeat.Position + Vector3.new(0, 2, 0) + driveSeat.CFrame.LookVector
+        )
+        task.wait(0.15)
+        local VIMsvc = game:GetService("VirtualInputManager")
+        VIMsvc:SendKeyEvent(true,  Enum.KeyCode.E, false, game)
+        task.wait(0.15)
+        VIMsvc:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end
+
+    -- Boucle de proximite (toutes les 2 secondes)
+    task.spawn(function()
+        while seatBtn.Parent do
+            task.wait(2)
+            local nearby = findNearbyVehicle()
+            seatBtn.Visible = nearby ~= nil
+        end
+    end)
+
+    seatBtn.MouseButton1Click:Connect(function()
+        local veh = findNearbyVehicle()
+        if veh then
+            task.spawn(function() sitInVehicle(veh) end)
+        end
+    end)
+
+    -- ===== TRACEUR JOUEURS =====
+    local tracerData = {}  -- [Player] = { line=Part, billboard=BillboardGui, label=TextLabel }
+
+    local function removeTracer(p)
+        local d = tracerData[p]
+        if d then
+            if d.line      and d.line.Parent      then d.line:Destroy()      end
+            if d.billboard and d.billboard.Parent then d.billboard:Destroy() end
+            tracerData[p] = nil
+        end
+    end
+
+    local function getPlayerRole(p)
+        local ok, role = pcall(function()
+            return p:GetAttribute("role") or p:GetAttribute("Role")
+        end)
+        if ok and role then return tostring(role) end
+        if p.Team then return p.Team.Name end
+        return "—"
+    end
+
+    task.spawn(function()
+        while openGui.Parent do
+            task.wait(0.1)
+            local char  = player.Character
+            local hrp   = char and char:FindFirstChild("HumanoidRootPart")
+
+            -- Si traceur desactive ou pas de perso : tout nettoyer
+            if not state.tracerEnabled or not hrp then
+                for p in pairs(tracerData) do removeTracer(p) end
+                continue
+            end
+
+            local myPos = hrp.Position
+
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p == player then continue end
+
+                -- Joueur parti ?
+                if not p.Parent then removeTracer(p) continue end
+
+                local pChar = p.Character
+                local pHRP  = pChar and pChar:FindFirstChild("HumanoidRootPart")
+
+                if not pHRP then removeTracer(p) continue end
+
+                local dist = (pHRP.Position - myPos).Magnitude
+
+                -- Hors du champ de detection → supprimer
+                if dist > state.tracerDist then removeTracer(p) continue end
+
+                -- Creer si inexistant
+                if not tracerData[p] then
+                    -- Ligne (Part etire entre les deux HRP)
+                    local line = Instance.new("Part")
+                    line.Anchored      = true
+                    line.CanCollide    = false
+                    line.CanQuery      = false
+                    line.CastShadow    = false
+                    line.Material      = Enum.Material.Neon
+                    line.Color         = Color3.fromRGB(255, 60, 60)
+                    line.Size          = Vector3.new(0.05, 0.05, 0.1)
+                    line.Transparency  = state.tracerLineEnabled and 0 or 1
+                    line.Parent        = workspace
+
+                    -- Billboard au-dessus du joueur
+                    local bb = Instance.new("BillboardGui")
+                    bb.AlwaysOnTop  = true
+                    bb.Size         = UDim2.new(0, 150, 0, 76)
+                    bb.StudsOffset  = Vector3.new(0, 3.5, 0)
+                    bb.Parent       = pHRP
+
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Name                = "Info"
+                    lbl.Size                = UDim2.new(1, 0, 1, 0)
+                    lbl.BackgroundTransparency = 1
+                    lbl.TextColor3          = Color3.fromRGB(255, 255, 255)
+                    lbl.TextSize            = 11
+                    lbl.Font               = Enum.Font.GothamBold
+                    lbl.TextXAlignment      = Enum.TextXAlignment.Center
+                    lbl.TextWrapped         = true
+                    lbl.TextStrokeTransparency = 0.4
+                    lbl.Parent              = bb
+
+                    tracerData[p] = { line = line, billboard = bb, label = lbl }
+                end
+
+                local d = tracerData[p]
+
+                -- Mettre a jour la ligne (si activee)
+                local toPos = pHRP.Position
+                if state.tracerLineEnabled then
+                    local mid = (myPos + toPos) / 2
+                    local len = (toPos - myPos).Magnitude
+                    d.line.Size   = Vector3.new(0.05, 0.05, math.max(len, 0.1))
+                    d.line.CFrame = CFrame.new(mid, toPos)
+                    d.line.Transparency = 0
+                else
+                    d.line.Transparency = 1
+                end
+
+                -- Mettre a jour le texte + couleur selon role
+                local roleStr = getPlayerRole(p)
+                local r = roleStr:lower()
+                local roleCol
+                if r:find("police") then
+                    roleCol = Color3.fromRGB(50, 110, 220)
+                elseif r:find("prisoner") then
+                    roleCol = Color3.fromRGB(220, 160, 30)
+                elseif r:find("fire") then
+                    roleCol = Color3.fromRGB(220, 60, 30)
+                elseif r:find("hars") then
+                    roleCol = Color3.fromRGB(30, 190, 140)
+                elseif r:find("bus") then
+                    roleCol = Color3.fromRGB(220, 180, 0)
+                elseif r:find("truck") then
+                    roleCol = Color3.fromRGB(130, 100, 60)
+                elseif r:find("citizen") then
+                    roleCol = Color3.fromRGB(80, 180, 80)
+                else
+                    roleCol = Color3.fromRGB(200, 200, 200)
+                end
+                d.label.TextColor3 = roleCol
+                d.line.Color       = roleCol
+                d.label.Text = p.DisplayName
+                    .. "\n@" .. p.Name
+                    .. "\n" .. math.floor(dist) .. " st"
+                    .. "\n" .. roleStr
+            end
+
+            -- Nettoyer les joueurs qui ont quitte le jeu
+            for p in pairs(tracerData) do
+                if not p.Parent then removeTracer(p) end
+            end
+        end
+
+        -- Nettoyage final
+        for p in pairs(tracerData) do removeTracer(p) end
     end)
 end
 
