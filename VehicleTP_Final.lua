@@ -122,12 +122,23 @@ local state = {
     vehiclePings = {},
     autoRobBijou     = false,  -- Voler la bijouterie (desactive par defaut)
     autoRobDistrib   = true,   -- Voler les distributeurs (active par defaut)
+    autoRobDroop     = false,  -- Ramasser droops (desactive par defaut)
+    autoSpamNearest  = false,  -- Spam DestroyedObjects sur le joueur le plus proche
+    tracerStickEnabled = false, -- Stick figure ESP (haut du corps, visible a travers murs)
+    tracerShowName   = false,  -- Afficher p.Name (pas displayName)
+    tracerShowHealth = true,   -- Afficher barre de vie
+    tracerShowTool   = false,  -- Afficher l'outil du joueur
+    tracerShowDist   = false,  -- Afficher la distance
+    vehicleFlyNoClip = false,  -- Traverser les murs pendant le fly (desactive par defaut)
     autoUnTaze       = false,  -- Annuler Tazed automatiquement (desactive par defaut)
     autoUnCuff       = true,   -- Annuler menottes automatiquement (active par defaut)
     tracerEnabled    = true,   -- Traceur joueurs (active par defaut)
     tracerDist        = 1000,   -- Distance de detection traceur (studs)
     tracerLineEnabled = false,  -- Ligne traceur (desactivee par defaut)
     atmosphereEnabled = true,   -- Atmosphere Lighting activee
+    vehicleFlyEnabled = false,           -- Vehicle fly personnel
+    vehicleFlySpeed   = 150,             -- Vitesse vehicle fly (studs/s)
+    flyToggleKey      = Enum.KeyCode.X,  -- Touche activation fly
     lang = "fr",
     horseEnabled = false,
     horseModel = nil,
@@ -174,6 +185,9 @@ local TRANSLATIONS = {
         params_autoRobCat      = "AUTO ROB",
         params_robBijou        = "Voler la bijouterie",
         params_robDistrib      = "Voler distributeur",
+        params_robDroop        = "Ramasser droops",
+        spam_auto_on           = "🔥  Auto-spam proche : ON",
+        spam_auto_off          = "🎯  Auto-spam joueur le plus proche",
         params_policeCat       = "POLICE ARRÊT",
         params_autoUnTaze      = "Tazed",
         params_autoUnCuff      = "Menotte",
@@ -182,6 +196,15 @@ local TRANSLATIONS = {
         params_traceur         = "Traceur",
         params_traceurDist     = "Distance traceur",
         params_traceurLigne    = "Ligne traceur",
+        params_traceurStick    = "Stick ESP (squelette)",
+        params_tracerName      = "Nom (p.Name)",
+        params_tracerHealth    = "Barre de vie",
+        params_tracerTool      = "Outil",
+        params_tracerDist      = "Distance",
+        params_vehicleFly      = "Vehicle fly",
+        params_flyNoClip       = "Traverser les murs",
+        params_vehicleFlySpeed = "Vitesse vehicle fly",
+        params_vehicleFlyKey   = "Touche fly",
         params_orbitCat        = "TOUCHE ORBIT",
         params_touchesCat      = "TOUCHES",
         params_sonsCat         = "SONS",
@@ -360,6 +383,9 @@ local TRANSLATIONS = {
         params_autoRobCat      = "AUTO ROB",
         params_robBijou        = "Rob jewelry store",
         params_robDistrib      = "Rob vending machines",
+        params_robDroop        = "Collect drops",
+        spam_auto_on           = "🔥  Auto-spam nearest : ON",
+        spam_auto_off          = "🎯  Auto-spam nearest player",
         params_policeCat       = "POLICE ARREST",
         params_autoUnTaze      = "Tazed",
         params_autoUnCuff      = "Handcuffs",
@@ -368,6 +394,15 @@ local TRANSLATIONS = {
         params_traceur         = "Tracer",
         params_traceurDist     = "Tracer distance",
         params_traceurLigne    = "Tracer line",
+        params_traceurStick    = "Stick ESP (skeleton)",
+        params_tracerName      = "Name (p.Name)",
+        params_tracerHealth    = "Health bar",
+        params_tracerTool      = "Tool",
+        params_tracerDist      = "Distance",
+        params_vehicleFly      = "Vehicle fly",
+        params_flyNoClip       = "Pass through walls",
+        params_vehicleFlySpeed = "Vehicle fly speed",
+        params_vehicleFlyKey   = "Fly key",
         params_orbitCat        = "ORBIT KEY",
         params_touchesCat      = "KEYS",
         params_sonsCat         = "SOUNDS",
@@ -3336,7 +3371,7 @@ local function createMainUI()
         prPanel.Position = UDim2.new(0, 10, 0, 50)
         prPanel.BackgroundColor3 = Color3.fromRGB(18, 22, 36)
         prPanel.BorderSizePixel = 0
-        prPanel.CanvasSize = UDim2.new(0, 0, 0, 1300)
+        prPanel.CanvasSize = UDim2.new(0, 0, 0, 1720)
         prPanel.ScrollingDirection = Enum.ScrollingDirection.Y
         prPanel.ScrollBarThickness = 5
         prPanel.ScrollBarImageColor3 = Color3.fromRGB(80, 90, 140)
@@ -3472,49 +3507,20 @@ local function createMainUI()
             catJoueurs.Text = "── " .. t("params_joueursCat") .. " ──"
         end})
 
-        -- Atmosphere toggle: boucle qui force les proprietes (le dayNightCycle du jeu les reecrit)
-        local savedAtmProps = nil
-        local atmOverrideActive = false
-
+        -- Atmosphere toggle : supprime/restaure le Sky (texte reste "Atmosphere")
+        local savedSky = nil
         local function setAtmosphere(enabled)
-            local atm = game:GetService("Lighting"):FindFirstChildOfClass("Atmosphere")
-            if not atm then return end
+            local Lighting = game:GetService("Lighting")
             if enabled then
-                -- Stopper la boucle d'override
-                atmOverrideActive = false
-                if savedAtmProps then
-                    atm.Density = savedAtmProps.Density
-                    atm.Haze    = savedAtmProps.Haze
-                    atm.Glare   = savedAtmProps.Glare
-                    atm.Offset  = savedAtmProps.Offset
-                    atm.Color   = savedAtmProps.Color
+                if savedSky then
+                    savedSky.Parent = Lighting
+                    savedSky = nil
                 end
             else
-                -- Sauvegarder les valeurs d'origine une seule fois
-                if not savedAtmProps then
-                    savedAtmProps = {
-                        Density = atm.Density,
-                        Haze    = atm.Haze,
-                        Glare   = atm.Glare,
-                        Offset  = atm.Offset,
-                        Color   = atm.Color,
-                    }
-                end
-                -- Demarrer la boucle d'override si pas deja active
-                if not atmOverrideActive then
-                    atmOverrideActive = true
-                    task.spawn(function()
-                        while atmOverrideActive do
-                            local a = game:GetService("Lighting"):FindFirstChildOfClass("Atmosphere")
-                            if a then
-                                a.Density = 0
-                                a.Haze    = 0
-                                a.Glare   = 0
-                                a.Offset  = 0
-                            end
-                            task.wait(0.05)
-                        end
-                    end)
+                local sky = Lighting:FindFirstChildOfClass("Sky")
+                if sky then
+                    savedSky = sky
+                    sky.Parent = nil
                 end
             end
         end
@@ -3531,11 +3537,26 @@ local function createMainUI()
         makeToggle(prPanel, "params_traceurLigne", 120, state.tracerLineEnabled, function(v)
             state.tracerLineEnabled = v
         end)
+        makeToggle(prPanel, "params_traceurStick", 162, state.tracerStickEnabled, function(v)
+            state.tracerStickEnabled = v
+        end)
+        makeToggle(prPanel, "params_tracerName",   204, state.tracerShowName, function(v)
+            state.tracerShowName = v
+        end)
+        makeToggle(prPanel, "params_tracerHealth", 246, state.tracerShowHealth, function(v)
+            state.tracerShowHealth = v
+        end)
+        makeToggle(prPanel, "params_tracerTool",   288, state.tracerShowTool, function(v)
+            state.tracerShowTool = v
+        end)
+        makeToggle(prPanel, "params_tracerDist",   330, state.tracerShowDist, function(v)
+            state.tracerShowDist = v
+        end)
 
         -- Slider distance traceur
         local trDistLabel = Instance.new("TextLabel")
         trDistLabel.Size = UDim2.new(0.65, 0, 0, 14)
-        trDistLabel.Position = UDim2.new(0, 8, 0, 162)
+        trDistLabel.Position = UDim2.new(0, 8, 0, 372)
         trDistLabel.BackgroundTransparency = 1
         trDistLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         trDistLabel.TextSize = 11
@@ -3545,38 +3566,40 @@ local function createMainUI()
         tReg(trDistLabel, "params_traceurDist")
 
         local TR_MIN, TR_MAX = 50, 1000
-        makeSimSlider(prPanel, 162, Color3.fromRGB(255, 60, 60),
+        makeSimSlider(prPanel, 372, Color3.fromRGB(255, 60, 60),
             function() return state.tracerDist end,
             function(v) state.tracerDist = v end,
             TR_MIN, TR_MAX)
 
 
         -- ── Categorie AUTO ROB ──
-        local catAutoRob = makeCatLabel(prPanel, t("params_autoRobCat"), 212)
+        local catAutoRob = makeCatLabel(prPanel, t("params_autoRobCat"), 422)
         tReg(catAutoRob, "params_autoRobCat")
-        -- Fix : mettre a jour le texte du label de categorie lors du changement de langue
         table.insert(langLabels, { inst = nil, key = "params_autoRobCat", updateFn = function()
             catAutoRob.Text = "── " .. t("params_autoRobCat") .. " ──"
         end})
 
-        makeToggle(prPanel, "params_robDistrib", 240,  state.autoRobDistrib, function(v)
+        makeToggle(prPanel, "params_robDistrib", 450,  state.autoRobDistrib, function(v)
             state.autoRobDistrib = v
         end)
-        makeToggle(prPanel, "params_robBijou",   282,  state.autoRobBijou,   function(v)
+        makeToggle(prPanel, "params_robBijou",   492,  state.autoRobBijou,   function(v)
             state.autoRobBijou = v
+        end)
+        makeToggle(prPanel, "params_robDroop",   534,  state.autoRobDroop,   function(v)
+            state.autoRobDroop = v
         end)
 
         -- ── Categorie POLICE ARRÊT ──
-        local catPolice = makeCatLabel(prPanel, t("params_policeCat"), 330)
+        local catPolice = makeCatLabel(prPanel, t("params_policeCat"), 582)
         tReg(catPolice, "params_policeCat")
         table.insert(langLabels, { inst = nil, key = "params_policeCat", updateFn = function()
             catPolice.Text = "── " .. t("params_policeCat") .. " ──"
         end})
 
-        makeToggle(prPanel, "params_autoUnTaze", 356, state.autoUnTaze, function(v)
+        makeToggle(prPanel, "params_autoUnTaze", 608, state.autoUnTaze, function(v)
             state.autoUnTaze = v
         end)
-        makeToggle(prPanel, "params_autoUnCuff", 398, state.autoUnCuff, function(v)
+        makeToggle(prPanel, "params_autoUnCuff", 650, state.autoUnCuff, function(v)
             state.autoUnCuff = v
         end)
 
@@ -3603,7 +3626,7 @@ local function createMainUI()
         end)
 
         -- ── Categorie TOUCHE ORBIT ──
-        local catOrbit = makeCatLabel(prPanel, t("params_orbitCat"), 430)
+        local catOrbit = makeCatLabel(prPanel, t("params_orbitCat"), 694)
         tReg(catOrbit, "params_orbitCat")
         table.insert(langLabels, { inst = nil, key = "params_orbitCat", updateFn = function()
             catOrbit.Text = "── " .. t("params_orbitCat") .. " ──"
@@ -3611,7 +3634,7 @@ local function createMainUI()
 
         local kbCapOuter = Instance.new("Frame")
         kbCapOuter.Size = UDim2.new(0, 80, 0, 54)
-        kbCapOuter.Position = UDim2.new(0, 8, 0, 456)
+        kbCapOuter.Position = UDim2.new(0, 8, 0, 720)
         kbCapOuter.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
         kbCapOuter.BorderSizePixel = 0
         kbCapOuter.Parent = prPanel
@@ -3635,7 +3658,7 @@ local function createMainUI()
 
         local kbInfoLabel = Instance.new("TextLabel")
         kbInfoLabel.Size = UDim2.new(1, -108, 0, 54)
-        kbInfoLabel.Position = UDim2.new(0, 100, 0, 456)
+        kbInfoLabel.Position = UDim2.new(0, 100, 0, 720)
         kbInfoLabel.BackgroundTransparency = 1
         kbInfoLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
         kbInfoLabel.TextSize = 12
@@ -3646,7 +3669,7 @@ local function createMainUI()
 
         local kbCustomBtn = Instance.new("TextButton")
         kbCustomBtn.Size = UDim2.new(0, 100, 0, 30)
-        kbCustomBtn.Position = UDim2.new(1, -110, 0, 456)
+        kbCustomBtn.Position = UDim2.new(1, -110, 0, 720)
         kbCustomBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
         kbCustomBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
         kbCustomBtn.TextSize = 11
@@ -3691,7 +3714,7 @@ local function createMainUI()
         end)
 
         -- ── Categorie TOUCHES (acceleration) ──
-        local catTouches = makeCatLabel(prPanel, t("params_touchesCat"), 524)
+        local catTouches = makeCatLabel(prPanel, t("params_touchesCat"), 776)
         tReg(catTouches, "params_touchesCat")
         table.insert(langLabels, { inst = nil, key = "params_touchesCat", updateFn = function()
             catTouches.Text = "── " .. t("params_touchesCat") .. " ──"
@@ -3699,7 +3722,7 @@ local function createMainUI()
 
         local kbAccelSectionLabel = Instance.new("TextLabel")
         kbAccelSectionLabel.Size = UDim2.new(1, -16, 0, 16)
-        kbAccelSectionLabel.Position = UDim2.new(0, 8, 0, 550)
+        kbAccelSectionLabel.Position = UDim2.new(0, 8, 0, 802)
         kbAccelSectionLabel.BackgroundTransparency = 1
         kbAccelSectionLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbAccelSectionLabel.TextSize = 11
@@ -3710,7 +3733,7 @@ local function createMainUI()
 
         local kbAccelKeyOuter = Instance.new("Frame")
         kbAccelKeyOuter.Size = UDim2.new(0, 70, 0, 40)
-        kbAccelKeyOuter.Position = UDim2.new(0, 8, 0, 570)
+        kbAccelKeyOuter.Position = UDim2.new(0, 8, 0, 822)
         kbAccelKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
         kbAccelKeyOuter.BorderSizePixel = 0
         kbAccelKeyOuter.Parent = prPanel
@@ -3734,7 +3757,7 @@ local function createMainUI()
 
         local kbAccelChangeBtn = Instance.new("TextButton")
         kbAccelChangeBtn.Size = UDim2.new(0, 110, 0, 30)
-        kbAccelChangeBtn.Position = UDim2.new(0, 86, 0, 575)
+        kbAccelChangeBtn.Position = UDim2.new(0, 86, 0, 827)
         kbAccelChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
         kbAccelChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
         kbAccelChangeBtn.TextSize = 11
@@ -3746,7 +3769,7 @@ local function createMainUI()
 
         local kbAccelStatusLabel = Instance.new("TextLabel")
         kbAccelStatusLabel.Size = UDim2.new(0, 130, 0, 30)
-        kbAccelStatusLabel.Position = UDim2.new(0, 202, 0, 575)
+        kbAccelStatusLabel.Position = UDim2.new(0, 202, 0, 827)
         kbAccelStatusLabel.BackgroundTransparency = 1
         kbAccelStatusLabel.TextColor3 = Color3.fromRGB(80, 220, 120)
         kbAccelStatusLabel.TextSize = 11
@@ -3788,7 +3811,7 @@ local function createMainUI()
         end)
 
         -- ── Categorie SONS ──
-        local catSons = makeCatLabel(prPanel, t("params_sonsCat"), 620)
+        local catSons = makeCatLabel(prPanel, t("params_sonsCat"), 872)
         tReg(catSons, "params_sonsCat")
         table.insert(langLabels, { inst = nil, key = "params_sonsCat", updateFn = function()
             catSons.Text = "── " .. t("params_sonsCat") .. " ──"
@@ -3796,7 +3819,7 @@ local function createMainUI()
 
         local kbPoneySndBtn = Instance.new("TextButton")
         kbPoneySndBtn.Size = UDim2.new(1, -16, 0, 28)
-        kbPoneySndBtn.Position = UDim2.new(0, 8, 0, 646)
+        kbPoneySndBtn.Position = UDim2.new(0, 8, 0, 898)
         kbPoneySndBtn.TextSize = 13
         kbPoneySndBtn.Font = Enum.Font.GothamBold
         kbPoneySndBtn.BorderSizePixel = 0
@@ -3819,7 +3842,7 @@ local function createMainUI()
 
         local kbPoliceSndBtn = Instance.new("TextButton")
         kbPoliceSndBtn.Size = UDim2.new(1, -16, 0, 28)
-        kbPoliceSndBtn.Position = UDim2.new(0, 8, 0, 680)
+        kbPoliceSndBtn.Position = UDim2.new(0, 8, 0, 932)
         kbPoliceSndBtn.TextSize = 13
         kbPoliceSndBtn.Font = Enum.Font.GothamBold
         kbPoliceSndBtn.BorderSizePixel = 0
@@ -3841,7 +3864,7 @@ local function createMainUI()
         end)
 
         -- ── Categorie HUD ──
-        local catHud = makeCatLabel(prPanel, t("params_hudCat"), 722)
+        local catHud = makeCatLabel(prPanel, t("params_hudCat"), 974)
         tReg(catHud, "params_hudCat")
         table.insert(langLabels, { inst = nil, key = "params_hudCat", updateFn = function()
             catHud.Text = "── " .. t("params_hudCat") .. " ──"
@@ -3849,7 +3872,7 @@ local function createMainUI()
 
         local kbPoliceNotifBtn = Instance.new("TextButton")
         kbPoliceNotifBtn.Size = UDim2.new(1, -16, 0, 28)
-        kbPoliceNotifBtn.Position = UDim2.new(0, 8, 0, 748)
+        kbPoliceNotifBtn.Position = UDim2.new(0, 8, 0, 1000)
         kbPoliceNotifBtn.TextSize = 13
         kbPoliceNotifBtn.Font = Enum.Font.GothamBold
         kbPoliceNotifBtn.BorderSizePixel = 0
@@ -3858,7 +3881,7 @@ local function createMainUI()
 
         local kbRoleBtn = Instance.new("TextButton")
         kbRoleBtn.Size = UDim2.new(1, -16, 0, 28)
-        kbRoleBtn.Position = UDim2.new(0, 8, 0, 782)
+        kbRoleBtn.Position = UDim2.new(0, 8, 0, 1034)
         kbRoleBtn.TextSize = 13
         kbRoleBtn.Font = Enum.Font.GothamBold
         kbRoleBtn.BorderSizePixel = 0
@@ -3897,7 +3920,7 @@ local function createMainUI()
         -- Slider detection police
         local kbDistLabel = Instance.new("TextLabel")
         kbDistLabel.Size = UDim2.new(0.65, 0, 0, 14)
-        kbDistLabel.Position = UDim2.new(0, 8, 0, 818)
+        kbDistLabel.Position = UDim2.new(0, 8, 0, 1070)
         kbDistLabel.BackgroundTransparency = 1
         kbDistLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbDistLabel.TextSize = 11
@@ -3908,7 +3931,7 @@ local function createMainUI()
 
         local kbDistValLabel = Instance.new("TextLabel")
         kbDistValLabel.Size = UDim2.new(0, 80, 0, 14)
-        kbDistValLabel.Position = UDim2.new(1, -88, 0, 818)
+        kbDistValLabel.Position = UDim2.new(1, -88, 0, 1070)
         kbDistValLabel.BackgroundTransparency = 1
         kbDistValLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
         kbDistValLabel.TextSize = 11
@@ -3919,7 +3942,7 @@ local function createMainUI()
 
         local kbDistTrack = Instance.new("Frame")
         kbDistTrack.Size = UDim2.new(1, -16, 0, 8)
-        kbDistTrack.Position = UDim2.new(0, 8, 0, 836)
+        kbDistTrack.Position = UDim2.new(0, 8, 0, 1088)
         kbDistTrack.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
         kbDistTrack.BorderSizePixel = 0
         kbDistTrack.Parent = prPanel
@@ -3975,7 +3998,7 @@ local function createMainUI()
         end)
 
         -- ── Categorie VEHICULE ──
-        local catVehicule = makeCatLabel(prPanel, t("params_vehiculeCat"), 858)
+        local catVehicule = makeCatLabel(prPanel, t("params_vehiculeCat"), 1110)
         tReg(catVehicule, "params_vehiculeCat")
         table.insert(langLabels, { inst = nil, key = "params_vehiculeCat", updateFn = function()
             catVehicule.Text = "── " .. t("params_vehiculeCat") .. " ──"
@@ -3984,7 +4007,7 @@ local function createMainUI()
         -- DET studs
         local kbStudsLabel = Instance.new("TextLabel")
         kbStudsLabel.Size = UDim2.new(1, -16, 0, 16)
-        kbStudsLabel.Position = UDim2.new(0, 8, 0, 884)
+        kbStudsLabel.Position = UDim2.new(0, 8, 0, 1136)
         kbStudsLabel.BackgroundTransparency = 1
         kbStudsLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbStudsLabel.TextSize = 11
@@ -3995,7 +4018,7 @@ local function createMainUI()
 
         local kbStudsMinus = Instance.new("TextButton")
         kbStudsMinus.Size = UDim2.new(0, 34, 0, 26)
-        kbStudsMinus.Position = UDim2.new(0, 8, 0, 902)
+        kbStudsMinus.Position = UDim2.new(0, 8, 0, 1154)
         kbStudsMinus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
         kbStudsMinus.TextColor3 = Color3.fromRGB(220, 220, 255)
         kbStudsMinus.TextSize = 16
@@ -4007,7 +4030,7 @@ local function createMainUI()
 
         local kbStudsVal = Instance.new("TextLabel")
         kbStudsVal.Size = UDim2.new(0, 60, 0, 26)
-        kbStudsVal.Position = UDim2.new(0, 46, 0, 902)
+        kbStudsVal.Position = UDim2.new(0, 46, 0, 1154)
         kbStudsVal.BackgroundColor3 = Color3.fromRGB(22, 26, 46)
         kbStudsVal.TextColor3 = Color3.fromRGB(255, 255, 255)
         kbStudsVal.TextSize = 14
@@ -4019,7 +4042,7 @@ local function createMainUI()
 
         local kbStudsPlus = Instance.new("TextButton")
         kbStudsPlus.Size = UDim2.new(0, 34, 0, 26)
-        kbStudsPlus.Position = UDim2.new(0, 110, 0, 902)
+        kbStudsPlus.Position = UDim2.new(0, 110, 0, 1154)
         kbStudsPlus.BackgroundColor3 = Color3.fromRGB(35, 40, 65)
         kbStudsPlus.TextColor3 = Color3.fromRGB(220, 220, 255)
         kbStudsPlus.TextSize = 16
@@ -4045,7 +4068,7 @@ local function createMainUI()
         -- Toggle sim vehicule
         local kbVehSimBtn = Instance.new("TextButton")
         kbVehSimBtn.Size = UDim2.new(1, -16, 0, 28)
-        kbVehSimBtn.Position = UDim2.new(0, 8, 0, 936)
+        kbVehSimBtn.Position = UDim2.new(0, 8, 0, 1188)
         kbVehSimBtn.TextSize = 13
         kbVehSimBtn.Font = Enum.Font.GothamBold
         kbVehSimBtn.BorderSizePixel = 0
@@ -4102,7 +4125,7 @@ local function createMainUI()
         -- Touche avancer (sim)
         local kbSimFwdSLabel = Instance.new("TextLabel")
         kbSimFwdSLabel.Size = UDim2.new(1, -16, 0, 14)
-        kbSimFwdSLabel.Position = UDim2.new(0, 8, 0, 972)
+        kbSimFwdSLabel.Position = UDim2.new(0, 8, 0, 1224)
         kbSimFwdSLabel.BackgroundTransparency = 1
         kbSimFwdSLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbSimFwdSLabel.TextSize = 11
@@ -4113,7 +4136,7 @@ local function createMainUI()
 
         local kbSimFwdOuter = Instance.new("Frame")
         kbSimFwdOuter.Size = UDim2.new(0, 50, 0, 32)
-        kbSimFwdOuter.Position = UDim2.new(0, 8, 0, 988)
+        kbSimFwdOuter.Position = UDim2.new(0, 8, 0, 1240)
         kbSimFwdOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
         kbSimFwdOuter.BorderSizePixel = 0
         kbSimFwdOuter.Parent = prPanel
@@ -4137,7 +4160,7 @@ local function createMainUI()
 
         local kbSimFwdChangeBtn = Instance.new("TextButton")
         kbSimFwdChangeBtn.Size = UDim2.new(0, 100, 0, 26)
-        kbSimFwdChangeBtn.Position = UDim2.new(0, 64, 0, 991)
+        kbSimFwdChangeBtn.Position = UDim2.new(0, 64, 0, 1243)
         kbSimFwdChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
         kbSimFwdChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
         kbSimFwdChangeBtn.TextSize = 11
@@ -4149,7 +4172,7 @@ local function createMainUI()
 
         local kbSimFwdStatus = Instance.new("TextLabel")
         kbSimFwdStatus.Size = UDim2.new(0, 120, 0, 26)
-        kbSimFwdStatus.Position = UDim2.new(0, 170, 0, 991)
+        kbSimFwdStatus.Position = UDim2.new(0, 170, 0, 1243)
         kbSimFwdStatus.BackgroundTransparency = 1
         kbSimFwdStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
         kbSimFwdStatus.TextSize = 11
@@ -4160,7 +4183,7 @@ local function createMainUI()
         -- Touche reculer (sim)
         local kbSimRevSLabel = Instance.new("TextLabel")
         kbSimRevSLabel.Size = UDim2.new(1, -16, 0, 14)
-        kbSimRevSLabel.Position = UDim2.new(0, 8, 0, 1026)
+        kbSimRevSLabel.Position = UDim2.new(0, 8, 0, 1278)
         kbSimRevSLabel.BackgroundTransparency = 1
         kbSimRevSLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbSimRevSLabel.TextSize = 11
@@ -4171,7 +4194,7 @@ local function createMainUI()
 
         local kbSimRevOuter = Instance.new("Frame")
         kbSimRevOuter.Size = UDim2.new(0, 50, 0, 32)
-        kbSimRevOuter.Position = UDim2.new(0, 8, 0, 1042)
+        kbSimRevOuter.Position = UDim2.new(0, 8, 0, 1294)
         kbSimRevOuter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
         kbSimRevOuter.BorderSizePixel = 0
         kbSimRevOuter.Parent = prPanel
@@ -4195,7 +4218,7 @@ local function createMainUI()
 
         local kbSimRevChangeBtn = Instance.new("TextButton")
         kbSimRevChangeBtn.Size = UDim2.new(0, 100, 0, 26)
-        kbSimRevChangeBtn.Position = UDim2.new(0, 64, 0, 1045)
+        kbSimRevChangeBtn.Position = UDim2.new(0, 64, 0, 1297)
         kbSimRevChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
         kbSimRevChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
         kbSimRevChangeBtn.TextSize = 11
@@ -4207,7 +4230,7 @@ local function createMainUI()
 
         local kbSimRevStatus = Instance.new("TextLabel")
         kbSimRevStatus.Size = UDim2.new(0, 120, 0, 26)
-        kbSimRevStatus.Position = UDim2.new(0, 170, 0, 1045)
+        kbSimRevStatus.Position = UDim2.new(0, 170, 0, 1297)
         kbSimRevStatus.BackgroundTransparency = 1
         kbSimRevStatus.TextColor3 = Color3.fromRGB(80, 220, 120)
         kbSimRevStatus.TextSize = 11
@@ -4275,7 +4298,7 @@ local function createMainUI()
         -- Slider vitesse avancer
         local kbSimFwdSpdLabel = Instance.new("TextLabel")
         kbSimFwdSpdLabel.Size = UDim2.new(0.65, 0, 0, 14)
-        kbSimFwdSpdLabel.Position = UDim2.new(0, 8, 0, 1080)
+        kbSimFwdSpdLabel.Position = UDim2.new(0, 8, 0, 1332)
         kbSimFwdSpdLabel.BackgroundTransparency = 1
         kbSimFwdSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbSimFwdSpdLabel.TextSize = 11
@@ -4283,7 +4306,7 @@ local function createMainUI()
         kbSimFwdSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
         kbSimFwdSpdLabel.Parent = prPanel
         tReg(kbSimFwdSpdLabel, "kb_sim_speed_fwd")
-        makeSimSlider(prPanel, 1080, Color3.fromRGB(0, 160, 220),
+        makeSimSlider(prPanel, 1348, Color3.fromRGB(0, 160, 220),
             function() return state.simMaxFwd end,
             function(v) state.simMaxFwd = v end,
             SIM_FWD_MIN, SIM_FWD_MAX)
@@ -4291,7 +4314,7 @@ local function createMainUI()
         -- Slider vitesse reculer
         local kbSimRevSpdLabel = Instance.new("TextLabel")
         kbSimRevSpdLabel.Size = UDim2.new(0.65, 0, 0, 14)
-        kbSimRevSpdLabel.Position = UDim2.new(0, 8, 0, 1114)
+        kbSimRevSpdLabel.Position = UDim2.new(0, 8, 0, 1382)
         kbSimRevSpdLabel.BackgroundTransparency = 1
         kbSimRevSpdLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbSimRevSpdLabel.TextSize = 11
@@ -4299,7 +4322,7 @@ local function createMainUI()
         kbSimRevSpdLabel.TextXAlignment = Enum.TextXAlignment.Left
         kbSimRevSpdLabel.Parent = prPanel
         tReg(kbSimRevSpdLabel, "kb_sim_speed_rev")
-        makeSimSlider(prPanel, 1114, Color3.fromRGB(220, 80, 80),
+        makeSimSlider(prPanel, 1398, Color3.fromRGB(220, 80, 80),
             function() return state.simMaxRev end,
             function(v) state.simMaxRev = v end,
             SIM_REV_MIN, SIM_REV_MAX)
@@ -4307,7 +4330,7 @@ local function createMainUI()
         -- Slider acceleration
         local kbSimAccelSLabel = Instance.new("TextLabel")
         kbSimAccelSLabel.Size = UDim2.new(0.65, 0, 0, 14)
-        kbSimAccelSLabel.Position = UDim2.new(0, 8, 0, 1148)
+        kbSimAccelSLabel.Position = UDim2.new(0, 8, 0, 1416)
         kbSimAccelSLabel.BackgroundTransparency = 1
         kbSimAccelSLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
         kbSimAccelSLabel.TextSize = 11
@@ -4315,7 +4338,7 @@ local function createMainUI()
         kbSimAccelSLabel.TextXAlignment = Enum.TextXAlignment.Left
         kbSimAccelSLabel.Parent = prPanel
         tReg(kbSimAccelSLabel, "kb_sim_accel_label")
-        makeSimSlider(prPanel, 1148, Color3.fromRGB(200, 140, 0),
+        makeSimSlider(prPanel, 1432, Color3.fromRGB(200, 140, 0),
             function() return state.simAccel end,
             function(v) state.simAccel = v end,
             SIM_ACCEL_MIN, SIM_ACCEL_MAX)
@@ -4323,7 +4346,7 @@ local function createMainUI()
         -- Toggle panel occupants
         local kbOccBtn = Instance.new("TextButton")
         kbOccBtn.Size = UDim2.new(1, -16, 0, 28)
-        kbOccBtn.Position = UDim2.new(0, 8, 0, 1178)
+        kbOccBtn.Position = UDim2.new(0, 8, 0, 1460)
         kbOccBtn.TextSize = 13
         kbOccBtn.Font = Enum.Font.GothamBold
         kbOccBtn.BorderSizePixel = 0
@@ -4341,6 +4364,104 @@ local function createMainUI()
         kbOccBtn.MouseButton1Click:Connect(function()
             state.occPanelEnabled = not state.occPanelEnabled
             updateOccBtn()
+        end)
+
+        -- Vehicle Fly
+        makeToggle(prPanel, "params_vehicleFly", 1492, state.vehicleFlyEnabled, function(v)
+            state.vehicleFlyEnabled = v
+        end)
+        makeToggle(prPanel, "params_flyNoClip", 1534, state.vehicleFlyNoClip, function(v)
+            state.vehicleFlyNoClip = v
+        end)
+
+        local flySpeedLabel = Instance.new("TextLabel")
+        flySpeedLabel.Size = UDim2.new(0.65, 0, 0, 14)
+        flySpeedLabel.Position = UDim2.new(0, 8, 0, 1576)
+        flySpeedLabel.BackgroundTransparency = 1
+        flySpeedLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        flySpeedLabel.TextSize = 11
+        flySpeedLabel.Font = Enum.Font.Gotham
+        flySpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+        flySpeedLabel.Parent = prPanel
+        tReg(flySpeedLabel, "params_vehicleFlySpeed")
+
+        local VFY_MIN, VFY_MAX = 50, 250
+        makeSimSlider(prPanel, 1592, Color3.fromRGB(100, 200, 255),
+            function() return state.vehicleFlySpeed end,
+            function(v) state.vehicleFlySpeed = v end,
+            VFY_MIN, VFY_MAX)
+
+        -- Touche fly
+        local flyKeyLabel = Instance.new("TextLabel")
+        flyKeyLabel.Size = UDim2.new(1, -16, 0, 14)
+        flyKeyLabel.Position = UDim2.new(0, 8, 0, 1624)
+        flyKeyLabel.BackgroundTransparency = 1
+        flyKeyLabel.TextColor3 = Color3.fromRGB(130, 130, 160)
+        flyKeyLabel.TextSize = 11
+        flyKeyLabel.Font = Enum.Font.Gotham
+        flyKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+        flyKeyLabel.Parent = prPanel
+        tReg(flyKeyLabel, "params_vehicleFlyKey")
+
+        local flyKeyOuter = Instance.new("Frame")
+        flyKeyOuter.Size = UDim2.new(0, 70, 0, 36)
+        flyKeyOuter.Position = UDim2.new(0, 8, 0, 1640)
+        flyKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
+        flyKeyOuter.BorderSizePixel = 0
+        flyKeyOuter.Parent = prPanel
+        createRounded(flyKeyOuter, 8)
+
+        local flyKeyInner = Instance.new("Frame")
+        flyKeyInner.Size = UDim2.new(1, -6, 1, -6)
+        flyKeyInner.Position = UDim2.new(0, 3, 0, 3)
+        flyKeyInner.BackgroundColor3 = Color3.fromRGB(20, 25, 45)
+        flyKeyInner.BorderSizePixel = 0
+        flyKeyInner.Parent = flyKeyOuter
+        createRounded(flyKeyInner, 6)
+
+        local flyKeyNameLabel = Instance.new("TextLabel")
+        flyKeyNameLabel.Size = UDim2.new(1, 0, 1, 0)
+        flyKeyNameLabel.BackgroundTransparency = 1
+        flyKeyNameLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+        flyKeyNameLabel.TextSize = 14
+        flyKeyNameLabel.Font = Enum.Font.GothamBold
+        flyKeyNameLabel.Parent = flyKeyInner
+
+        local flyKeyChangeBtn = Instance.new("TextButton")
+        flyKeyChangeBtn.Size = UDim2.new(0, 100, 0, 28)
+        flyKeyChangeBtn.Position = UDim2.new(0, 86, 0, 1643)
+        flyKeyChangeBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+        flyKeyChangeBtn.TextColor3 = Color3.fromRGB(220, 200, 255)
+        flyKeyChangeBtn.TextSize = 11
+        flyKeyChangeBtn.Font = Enum.Font.GothamBold
+        flyKeyChangeBtn.BorderSizePixel = 0
+        flyKeyChangeBtn.Parent = prPanel
+        createRounded(flyKeyChangeBtn, 8)
+        tReg(flyKeyChangeBtn, "cv_other_key")
+
+        local flyKeyWaiting = false
+        local function setFlyKey(kc)
+            state.flyToggleKey = kc
+            flyKeyNameLabel.Text = tostring(kc):gsub("Enum.KeyCode.", "")
+            flyKeyOuter.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+            flyKeyWaiting = false
+        end
+        setFlyKey(state.flyToggleKey)
+
+        flyKeyChangeBtn.MouseButton1Click:Connect(function()
+            flyKeyWaiting = true
+            flyKeyNameLabel.Text = "?"
+            flyKeyOuter.BackgroundColor3 = Color3.fromRGB(220, 160, 0)
+        end)
+
+        UserInputService.InputBegan:Connect(function(input, _gp)
+            if not flyKeyWaiting then return end
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if input.KeyCode == Enum.KeyCode.Escape then
+                setFlyKey(state.flyToggleKey)
+                return
+            end
+            setFlyKey(input.KeyCode)
         end)
 
     end
@@ -5009,6 +5130,7 @@ local function createMainUI()
     local currentTab = "building"
     local knownDealers = {}
     local dealerRefreshBtn = nil
+    local autoNearestBtn   = nil
 
     local tabsFrame = Instance.new("ScrollingFrame")
     tabsFrame.Size = UDim2.new(1, -20, 0, 36)
@@ -5096,6 +5218,9 @@ local function createMainUI()
             if dealerRefreshBtn then
                 dealerRefreshBtn.Visible = (cat.key == "dealer")
             end
+            if autoNearestBtn then
+                autoNearestBtn.Visible = (cat.key == "players")
+            end
         end)
     end
 
@@ -5125,6 +5250,48 @@ local function createMainUI()
         end
     end
 
+    -- Bouton auto-cible proche (onglet JOUEURS)
+    do
+        local nb = Instance.new("TextButton")
+        nb.Size = UDim2.new(1, -20, 0, 26)
+        nb.Position = UDim2.new(0, 10, 0, 50)
+        nb.TextSize = 12
+        nb.Font = Enum.Font.GothamBold
+        nb.BorderSizePixel = 0
+        nb.Visible = false
+        nb.Parent = teleportScreen
+        createRounded(nb, 5)
+        autoNearestBtn = nb
+
+        local function updateAutoNearestBtn()
+            if state.autoSpamNearest then
+                nb.Text = t("spam_auto_on")
+                nb.BackgroundColor3 = Color3.fromRGB(160, 40, 10)
+                nb.TextColor3 = Color3.fromRGB(255, 200, 160)
+            else
+                nb.Text = t("spam_auto_off")
+                nb.BackgroundColor3 = Color3.fromRGB(50, 30, 80)
+                nb.TextColor3 = Color3.fromRGB(200, 170, 255)
+            end
+        end
+        updateAutoNearestBtn()
+        table.insert(langLabels, { inst = nil, key = "spam_auto_off", updateFn = function()
+            updateAutoNearestBtn()
+        end})
+
+        nb.MouseButton1Click:Connect(function()
+            state.autoSpamNearest = not state.autoSpamNearest
+            updateAutoNearestBtn()
+            -- Quand on desactive : la boucle auto-spam appellera stopSpam() au prochain tick (0.4s)
+        end)
+
+        -- Decaler le scrollFrame players pour laisser la place au bouton
+        if tabContents["players"] then
+            tabContents["players"].Position = UDim2.new(0, 10, 0, 82)
+            tabContents["players"].Size = UDim2.new(1, -20, 1, -196)
+        end
+    end
+
     -- L'onglet vehicles utilise une liste verticale (pas de grille) pour afficher plus d'info
     if tabContents["vehicles"] then
         local vGrid = tabContents["vehicles"]:FindFirstChildOfClass("UIGridLayout")
@@ -5134,6 +5301,18 @@ local function createMainUI()
         vList.Parent = tabContents["vehicles"]
         vList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             tabContents["vehicles"].CanvasSize = UDim2.new(0, 0, 0, vList.AbsoluteContentSize.Y + 10)
+        end)
+    end
+
+    -- L'onglet players utilise aussi une liste verticale (cartes pleine largeur)
+    if tabContents["players"] then
+        local pGrid = tabContents["players"]:FindFirstChildOfClass("UIGridLayout")
+        if pGrid then pGrid:Destroy() end
+        local pList = Instance.new("UIListLayout")
+        pList.Padding = UDim.new(0, 5)
+        pList.Parent = tabContents["players"]
+        pList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            tabContents["players"].CanvasSize = UDim2.new(0, 0, 0, pList.AbsoluteContentSize.Y + 10)
         end)
     end
 
@@ -6674,11 +6853,20 @@ local function createMainUI()
             return
         end
 
+        local myHrpV = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        local sortedVehicles = {}
         for _, veh in ipairs(vehiclesFolder:GetChildren()) do
             if not (veh:IsA("Model") or veh:IsA("BasePart")) then continue end
-
             local root = veh:IsA("Model") and (veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart")) or veh
             if not root then continue end
+            local dist = myHrpV and (root.Position - myHrpV.Position).Magnitude or math.huge
+            table.insert(sortedVehicles, { veh = veh, root = root, dist = dist })
+        end
+        table.sort(sortedVehicles, function(a, b) return a.dist < b.dist end)
+
+        for _, entry in ipairs(sortedVehicles) do
+            local veh  = entry.veh
+            local root = entry.root
 
             local pos = root.Position
 
@@ -6963,10 +7151,12 @@ local function createMainUI()
     -- Spam DestroyedObjects : cible active + thread
     local spamTarget = nil
     local spamThread = nil
+    local autoSpamTarget = nil  -- cible geree par la boucle auto (distinct du clic manuel)
     local function stopSpam()
         spamTarget = nil
         spamThread = nil
     end
+
     local function launchAllDestroyed(targetPos)
         local destroyedFolder = workspace:FindFirstChild("DestroyedObjects")
         if not destroyedFolder then return end
@@ -7031,9 +7221,54 @@ local function createMainUI()
         end)
     end
 
+    -- Boucle auto-spam : cible automatiquement le joueur le plus proche
+    task.spawn(function()
+        -- Attendre que l'interface soit creee (openGui est un local defini plus loin)
+        repeat task.wait(0.2) until state.openGui ~= nil
+        while state.openGui.Parent do
+            task.wait(0.4)
+            if not state.autoSpamNearest then
+                -- Stopper SEULEMENT si c'est la boucle auto qui avait lance le spam
+                if autoSpamTarget ~= nil and spamTarget == autoSpamTarget then
+                    stopSpam()
+                end
+                autoSpamTarget = nil
+                continue
+            end
+            local myHrpA = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if not myHrpA then continue end
+            local nearestPlr, nearestDist = nil, math.huge
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p == player then continue end
+                local c = p.Character
+                local h = c and c:FindFirstChild("HumanoidRootPart")
+                if not h then continue end
+                local d = (h.Position - myHrpA.Position).Magnitude
+                if d < nearestDist then nearestPlr = p; nearestDist = d end
+            end
+            if not nearestPlr then
+                if autoSpamTarget ~= nil and spamTarget == autoSpamTarget then stopSpam() end
+                autoSpamTarget = nil
+                continue
+            end
+            -- Changer de cible si le plus proche a change
+            if autoSpamTarget ~= nearestPlr then
+                -- Ne pas ecraser un spam manuel
+                if spamTarget == nil or spamTarget == autoSpamTarget then
+                    stopSpam()
+                    autoSpamTarget = nearestPlr
+                    startSpam(nearestPlr)
+                end
+            end
+        end
+    end)
+
     local function refreshPlayersTab()
         if dealerRefreshBtn then
             dealerRefreshBtn.Visible = (currentTab == "dealer")
+        end
+        if autoNearestBtn then
+            autoNearestBtn.Visible = (currentTab == "players")
         end
         local playersFrame = tabContents.players
         if not playersFrame then
@@ -7046,8 +7281,23 @@ local function createMainUI()
             end
         end
 
+        -- Trier les joueurs par distance (plus proche en premier)
+        local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        local sortedPlayers = {}
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= player then
+                local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local dist = myHrp and (hrp.Position - myHrp.Position).Magnitude or math.huge
+                    table.insert(sortedPlayers, { plr = plr, dist = dist })
+                end
+            end
+        end
+        table.sort(sortedPlayers, function(a, b) return a.dist < b.dist end)
+
+        for _, entry in ipairs(sortedPlayers) do
+            local plr = entry.plr
+            do
                 local currentChar = plr.Character
                 local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
                 if not currentHrp then
@@ -7145,8 +7395,10 @@ local function createMainUI()
 
                 launchBtn.MouseButton1Click:Connect(function()
                     if spamTarget == plr then
+                        autoSpamTarget = nil
                         stopSpam()
                     else
+                        autoSpamTarget = nil  -- clic manuel : la boucle auto ne doit pas interferer
                         stopSpam()
                         startSpam(plr)
                     end
@@ -7901,6 +8153,22 @@ local function createMainUI()
 
             local doneMachines  = {}
             local doneJewelry   = {}
+            local doneDroops    = {}
+
+            -- Historique des distributeurs connus (positions sauvegardees)
+            -- { {machine=obj, pos=Vector3, lastVisit=tick()}, ... }
+            local knownMachines = {}
+            local function recordMachine(machine, root)
+                for _, km in ipairs(knownMachines) do
+                    if km.machine == machine then return end
+                end
+                table.insert(knownMachines, {machine=machine, pos=root.Position, lastVisit=0})
+            end
+            local function updateMachineVisit(machine)
+                for _, km in ipairs(knownMachines) do
+                    if km.machine == machine then km.lastVisit = tick() return end
+                end
+            end
 
             -- Retourne la position centrale d'un modele de bijou
             local function getJewelryPos(model)
@@ -7910,51 +8178,37 @@ local function createMainUI()
                 return p and p.Position or nil
             end
 
-            -- Boucle principale : distributeurs + bijouterie
+            -- Verifie si un distributeur ouvert existe dans vmFolder
+            local function findOpenMachine()
+                if not (state.autoRobDistrib and vmFolder) then return nil end
+                local hrp2 = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                local best, bestDist = nil, math.huge
+                for _, machine in ipairs(vmFolder:GetChildren()) do
+                    if doneMachines[machine] then continue end
+                    if isVendingMachineEmpty(machine) then continue end
+                    local r = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
+                    if not r then continue end
+                    recordMachine(machine, r)
+                    local d = hrp2 and (hrp2.Position - r.Position).Magnitude or math.huge
+                    if d < bestDist then best = {type="machine", machine=machine, root=r}; bestDist = d end
+                end
+                return best
+            end
+
+            -- Boucle principale : priorite distributeur > bijouterie > droop > anciens distributeurs
             while autoVoleRunning do
-                local targets = {}
-
-                -- Distributeurs (si active dans parametres)
-                if state.autoRobDistrib and vmFolder then
-                    for _, machine in ipairs(vmFolder:GetChildren()) do
-                        if doneMachines[machine] then continue end
-                        if isVendingMachineEmpty(machine) then
-                            doneMachines[machine] = true; continue
-                        end
-                        local r = machine.PrimaryPart or machine:FindFirstChildWhichIsA("BasePart")
-                        if r then table.insert(targets, {type="machine", machine=machine, root=r}) end
-                    end
-                end
-
-                -- Vitrines bijouterie (si active dans parametres)
-                if state.autoRobBijou and jwRobbables then
-                    for _, model in ipairs(jwRobbables:GetChildren()) do
-                        if doneJewelry[model] then continue end
-                        if model:GetAttribute("Broken") == true then
-                            doneJewelry[model] = true; continue
-                        end
-                        local pos = getJewelryPos(model)
-                        if pos then table.insert(targets, {type="jewelry", model=model, pos=pos}) end
-                    end
-                end
-
-                if #targets == 0 then break end
-
-                -- Cible la plus proche
                 local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                 if not hrp then break end
-                local nearest, nearestDist = nil, math.huge
-                for _, tgt in ipairs(targets) do
-                    local p = tgt.type == "machine" and tgt.root.Position or tgt.pos
-                    local d = (hrp.Position - p).Magnitude
-                    if d < nearestDist then nearest = tgt; nearestDist = d end
-                end
-                if not nearest then break end
 
-                -- ── DISTRIBUTEUR ─────────────────────────────────────────────
-                if nearest.type == "machine" then
+                -- PRIORITE 1 : Distributeurs ouverts
+                local machineTarget = findOpenMachine()
+                if machineTarget then
+                    local nearest = machineTarget
+
+                -- ── PRIORITE 1 : DISTRIBUTEUR OUVERT ────────────────────────
                     local machine = nearest.machine
                     local machRoot = nearest.root
+                    updateMachineVisit(machine)
 
                     if isCopNearby(machRoot.Position, 200) then task.wait(1); continue end
 
@@ -8016,16 +8270,34 @@ local function createMainUI()
                     task.wait(1.2)
                     collectDropsNear(machRoot.Position, 80)
 
-                -- ── VITRINE BIJOUTERIE ────────────────────────────────────────
-                else
-                    local model    = nearest.model
-                    local jwCenter = nearest.pos
+                -- ── PRIORITE 2 : BIJOUTERIE (si actif, aucun distributeur ouvert) ──
+                elseif state.autoRobBijou and jwRobbables then
+                    -- Trouver la vitrine non cassee la plus proche
+                    local jwNearest, jwNearDist = nil, math.huge
+                    for _, model in ipairs(jwRobbables:GetChildren()) do
+                        if doneJewelry[model] then continue end
+                        if model:GetAttribute("Broken") == true then
+                            doneJewelry[model] = true; continue
+                        end
+                        local pos = getJewelryPos(model)
+                        if pos then
+                            local d = (hrp.Position - pos).Magnitude
+                            if d < jwNearDist then jwNearest = {model=model, pos=pos}; jwNearDist = d end
+                        end
+                    end
+                    if not jwNearest then
+                        -- Bijouterie finie, continuer boucle pour verifier droops/anciens
+                        task.wait(0.5)
+                        continue
+                    end
+
+                    local model    = jwNearest.model
+                    local jwCenter = jwNearest.pos
                     local BIJOUTERIE_ENTRANCE = Vector3.new(-427.967, 21.395, 3555.956)
                     local PRISON_POS          = Vector3.new(-604.927,  9.833, 3051.886)
 
                     if isCopNearby(jwCenter, 200) then task.wait(1); continue end
 
-                    -- Garer le vehicule a l'entree de la bijouterie (pas sur la vitrine)
                     statusLabel.Text = "Auto vole: bijouterie " .. model.Name .. "..."
                     microTeleport(BIJOUTERIE_ENTRANCE, statusLabel, {wallPass = true})
                     waitTpDone()
@@ -8033,27 +8305,20 @@ local function createMainUI()
 
                     dismountChar(); task.wait(0.4)
 
-                    -- TP direct du joueur a cote de la vitrine
-                    -- Y = pivot du modele - 1.5 (ramene au sol depuis la surface de la vitrine)
                     local modelCF  = model:GetPivot()
                     local pivotPos = modelCF.Position
-                    -- Se placer devant la face avant du modele (LookVector = avant en Roblox)
                     local fwd      = Vector3.new(modelCF.LookVector.X, 0, modelCF.LookVector.Z).Unit
                     local standPos  = pivotPos + fwd * 2 + Vector3.new(0, -1.5, 0)
                     local faceToward = pivotPos + Vector3.new(0, -1.5, 0)
 
                     hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        hrp.CFrame = CFrame.new(standPos, faceToward)
-                        task.wait(0.2)
-                    end
+                    if hrp then hrp.CFrame = CFrame.new(standPos, faceToward); task.wait(0.2) end
                     if not autoVoleRunning then break end
 
-                    -- Taper F jusqu'a ce que Broken = true
                     statusLabel.Text = "Auto vole: casse vitrine " .. model.Name .. "..."
-                    local hitDeadline = tick() + 60
+                    local hitDeadline2 = tick() + 60
                     local copFled = false
-                    while autoVoleRunning and tick() < hitDeadline do
+                    while autoVoleRunning and tick() < hitDeadline2 do
                         if model:GetAttribute("Broken") == true then break end
                         if isCopNearby(jwCenter, 50) then copFled = true; break end
                         hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -8073,7 +8338,6 @@ local function createMainUI()
                         continue
                     end
 
-                    -- Broken = true : E maintenu 5s relache, puis E maintenu 5s encore
                     if autoVoleRunning and model:GetAttribute("Broken") == true then
                         statusLabel.Text = "Auto vole: ramasse bijoux " .. model.Name .. "..."
                         task.wait(0.3)
@@ -8089,11 +8353,111 @@ local function createMainUI()
                         task.wait(5)
                         VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
                         task.wait(0.3)
-                        -- Marquer cette vitrine comme faite (Broken confirme)
                         doneJewelry[model] = true
                     end
-                    -- Si Broken jamais passe a true (timeout ou mauvaise position)
-                    -- on ne marque PAS doneJewelry -> on retentera au prochain tour
+
+                -- ── PRIORITE 3 : DROOPS A LONGUE DISTANCE (si actif) ──────────
+                elseif state.autoRobDroop then
+                    local dropsFolder = workspace:FindFirstChild("Drops")
+                    if not dropsFolder then task.wait(2); continue end
+
+                    -- Trouver le droop le plus proche non deja ramasse
+                    local dropTarget, dropPart2, dropDist = nil, nil, math.huge
+                    for _, d in ipairs(dropsFolder:GetChildren()) do
+                        if doneDroops[d] then continue end
+                        local p = d:IsA("BasePart") and d or d:FindFirstChildWhichIsA("BasePart")
+                        if p then
+                            local dd = (hrp.Position - p.Position).Magnitude
+                            if dd < dropDist then
+                                dropTarget = d; dropPart2 = p; dropDist = dd
+                            end
+                        end
+                    end
+
+                    if not dropTarget then
+                        -- Aucun droop, attendre et recheck (peut en spawner de nouveaux)
+                        doneDroops = {}  -- reset pour re-scanner
+                        task.wait(3); continue
+                    end
+
+                    doneDroops[dropTarget] = true
+                    statusLabel.Text = "Auto vole: droop " .. math.floor(dropDist) .. " studs..."
+
+                    -- Conduire a cote du droop (offset de 4 studs), pas dessus
+                    local dropPos = dropPart2.Position
+                    local offsetDir = (hrp.Position - dropPos)
+                    offsetDir = Vector3.new(offsetDir.X, 0, offsetDir.Z)
+                    if offsetDir.Magnitude > 0.1 then
+                        offsetDir = offsetDir.Unit * 4
+                    else
+                        offsetDir = Vector3.new(4, 0, 0)
+                    end
+                    local stopPos = dropPos + offsetDir + Vector3.new(0, 1, 0)
+                    microTeleport(stopPos, statusLabel, {wallPass = true})
+                    waitTpDone()
+                    if not autoVoleRunning then break end
+
+                    -- Descendre du vehicule
+                    dismountChar(); task.wait(0.3)
+
+                    -- Marcher sur le droop a pied
+                    hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        hrp.CFrame = CFrame.new(dropPos + Vector3.new(0, 2, 0))
+                        task.wait(0.15)
+                    end
+                    if not autoVoleRunning then break end
+                    statusLabel.Text = "Auto vole: collecte droop..."
+                    collectItem(dropTarget)
+                    task.wait(0.3)
+
+                -- ── PRIORITE 4 : ANCIENS DISTRIBUTEURS (re-verifier) ─────────
+                elseif state.autoRobDistrib and #knownMachines > 0 then
+                    -- Trier par dernier visite (le plus ancien en premier)
+                    table.sort(knownMachines, function(a, b) return a.lastVisit < b.lastVisit end)
+                    local km = knownMachines[1]
+
+                    -- Verifier que la machine existe encore
+                    if not (km.machine and km.machine.Parent) then
+                        table.remove(knownMachines, 1)
+                        continue
+                    end
+
+                    statusLabel.Text = "Auto vole: vers distributeur connu..."
+                    -- Conduire vers l'ancien distributeur en surveillant si un ouvert apparait
+                    local arrived = false
+                    task.spawn(function()
+                        microTeleport(km.pos, statusLabel, {wallPass = true})
+                        waitTpDone()
+                        arrived = true
+                    end)
+                    -- Pendant le trajet, verifier chaque seconde si un distributeur ouvert apparait
+                    local deadline3 = tick() + 30
+                    while autoVoleRunning and not arrived and tick() < deadline3 do
+                        task.wait(1)
+                        local open = findOpenMachine()
+                        if open then
+                            -- Un distributeur ouvert trouve en route ! reset doneMachines partiel
+                            arrived = true  -- abort la conduite (microTeleport finira mais on ignorera)
+                            break
+                        end
+                    end
+                    if not autoVoleRunning then break end
+
+                    -- Verifier a l'arrivee si la machine est maintenant ouverte
+                    km.lastVisit = tick()
+                    if isVendingMachineEmpty(km.machine) then
+                        -- Toujours vide, continuer vers le prochain
+                        continue
+                    else
+                        -- Elle est ouverte ! l'ajouter aux cibles (sera prise au prochain tour)
+                        doneMachines[km.machine] = nil
+                        continue
+                    end
+
+                -- Rien a faire
+                else
+                    break
                 end
 
                 -- Remonter dans le vehicule apres chaque cible
@@ -8134,6 +8498,14 @@ local function createMainUI()
     tReg(mbWp, "menu_waypoints")
 
     -- Ecoute globale de la touche orbit
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if input.KeyCode == state.flyToggleKey then
+            state.vehicleFlyEnabled = not state.vehicleFlyEnabled
+        end
+    end)
+
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
@@ -8933,15 +9305,128 @@ local function createOpenButton(mainGui)
     end)
 
     -- ===== TRACEUR JOUEURS =====
-    local tracerData = {}  -- [Player] = { line=Part, billboard=BillboardGui, label=TextLabel }
+    local tracerData = {}  -- [Player] = { line, billboard, label, stick }
 
     local function removeTracer(p)
         local d = tracerData[p]
         if d then
             if d.line      and d.line.Parent      then d.line:Destroy()      end
             if d.billboard and d.billboard.Parent then d.billboard:Destroy() end
+            if d.bbHp      and d.bbHp.Parent      then d.bbHp:Destroy()      end
+            if d.stick and d.stick.model and d.stick.model.Parent then
+                d.stick.model:Destroy()
+            end
             tracerData[p] = nil
         end
+    end
+
+    -- Folder dedie dans workspace pour tous les sticks (proprete + cleanup facile)
+    local stickFolder = Instance.new("Folder")
+    stickFolder.Name = "StickESP"
+    stickFolder.Parent = workspace
+
+    -- Cree un Model 3D avec Parts (bones) + 1 Highlight AlwaysOnTop pour le stick ESP
+    -- Parts dans workspace = perspective correcte, visible a travers les murs
+    local function makeStickFigure()
+        local model = Instance.new("Model")
+        model.Name = "StickESP"
+        model.Parent = stickFolder
+
+        -- 1 seul Highlight pour tout le modele (evite la limite de ~31 Highlights)
+        local hl = Instance.new("Highlight")
+        hl.FillColor          = Color3.fromRGB(255, 255, 255)
+        hl.OutlineColor       = Color3.fromRGB(255, 255, 255)
+        hl.FillTransparency   = 0
+        hl.OutlineTransparency = 1
+        hl.DepthMode          = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Enabled            = false
+        hl.Parent             = model
+
+        local function newBone()
+            local p = Instance.new("Part")
+            p.Size         = Vector3.new(0.07, 0.07, 1)
+            p.Anchored     = true
+            p.CanCollide   = false
+            p.CanQuery     = false
+            p.CanTouch     = false
+            p.CastShadow   = false
+            p.Material     = Enum.Material.Neon
+            p.Color        = Color3.fromRGB(255, 255, 255)
+            p.Transparency = 0
+            p.Parent       = model
+            return p
+        end
+
+        return {
+            model = model,
+            hl    = hl,
+            bones = {
+                newBone(), -- 1  cou
+                newBone(), -- 2  epaule gauche
+                newBone(), -- 3  epaule droite
+                newBone(), -- 4  coude gauche
+                newBone(), -- 5  coude droit
+                newBone(), -- 6  poignet gauche
+                newBone(), -- 7  poignet droit
+                newBone(), -- 8  colonne
+                newBone(), -- 9  hanche gauche
+                newBone(), -- 10 hanche droite
+                newBone(), -- 11 genou gauche
+                newBone(), -- 12 genou droit
+                newBone(), -- 13 cheville gauche
+                newBone(), -- 14 cheville droite
+            }
+        }
+    end
+
+    -- Positionne une Part 3D entre deux Parts du personnage
+    local function set3DBone(bone, partA, partB)
+        if not partA or not partA.Parent or not partB or not partB.Parent then
+            bone.Transparency = 1 return
+        end
+        local p1, p2 = partA.Position, partB.Position
+        local len = (p2 - p1).Magnitude
+        if len < 0.05 then bone.Transparency = 1 return end
+        bone.Transparency = 0
+        bone.Size      = Vector3.new(0.07, 0.07, len)
+        bone.CFrame    = CFrame.lookAt(p1, p2) * CFrame.new(0, 0, -len / 2)
+    end
+
+    -- Met a jour le stick selon les positions reelles des membres
+    local function updateStick(stickData, pChar)
+        if not stickData or not pChar then return end
+
+        local head   = pChar:FindFirstChild("Head")
+        local torso  = pChar:FindFirstChild("UpperTorso") or pChar:FindFirstChild("Torso")
+        local lTorso = pChar:FindFirstChild("LowerTorso")
+        local lUA    = pChar:FindFirstChild("LeftUpperArm")  or pChar:FindFirstChild("Left Arm")
+        local rUA    = pChar:FindFirstChild("RightUpperArm") or pChar:FindFirstChild("Right Arm")
+        local lLA    = pChar:FindFirstChild("LeftLowerArm")
+        local rLA    = pChar:FindFirstChild("RightLowerArm")
+        local lH     = pChar:FindFirstChild("LeftHand")
+        local rH     = pChar:FindFirstChild("RightHand")
+        local lUL    = pChar:FindFirstChild("LeftUpperLeg")  or pChar:FindFirstChild("Left Leg")
+        local rUL    = pChar:FindFirstChild("RightUpperLeg") or pChar:FindFirstChild("Right Leg")
+        local lLL    = pChar:FindFirstChild("LeftLowerLeg")
+        local rLL    = pChar:FindFirstChild("RightLowerLeg")
+        local lF     = pChar:FindFirstChild("LeftFoot")
+        local rF     = pChar:FindFirstChild("RightFoot")
+
+        local b = stickData.bones
+        set3DBone(b[1],  head,   torso)
+        set3DBone(b[2],  torso,  lUA)
+        set3DBone(b[3],  torso,  rUA)
+        set3DBone(b[4],  lUA,    lLA)
+        set3DBone(b[5],  rUA,    rLA)
+        set3DBone(b[6],  lLA,    lH)
+        set3DBone(b[7],  rLA,    rH)
+        set3DBone(b[8],  torso,  lTorso)
+        set3DBone(b[9],  lTorso, lUL)
+        set3DBone(b[10], lTorso, rUL)
+        set3DBone(b[11], lUL,    lLL)
+        set3DBone(b[12], rUL,    rLL)
+        set3DBone(b[13], lLL,    lF)
+        set3DBone(b[14], rLL,    rF)
     end
 
     local function getPlayerRole(p)
@@ -8997,11 +9482,11 @@ local function createOpenButton(mainGui)
                     line.Transparency  = state.tracerLineEnabled and 0 or 1
                     line.Parent        = workspace
 
-                    -- Billboard au-dessus du joueur
+                    -- Billboard TEXTE : pixel fixe, monté plus haut pour pas chevaucher la barre
                     local bb = Instance.new("BillboardGui")
                     bb.AlwaysOnTop  = true
-                    bb.Size         = UDim2.new(0, 150, 0, 76)
-                    bb.StudsOffset  = Vector3.new(0, 3.5, 0)
+                    bb.Size         = UDim2.new(0, 120, 0, 72)
+                    bb.StudsOffset  = Vector3.new(0, 5.0, 0)
                     bb.Parent       = pHRP
 
                     local lbl = Instance.new("TextLabel")
@@ -9016,7 +9501,37 @@ local function createOpenButton(mainGui)
                     lbl.TextStrokeTransparency = 0.4
                     lbl.Parent              = bb
 
-                    tracerData[p] = { line = line, billboard = bb, label = lbl }
+                    -- hpLabel = nil, les HP sont dans lbl
+                    local hpLabel = nil
+                    local bbHpText = nil
+
+                    -- Billboard BARRE : studs, suit la taille du perso
+                    local bbHp = Instance.new("BillboardGui")
+                    bbHp.AlwaysOnTop = true
+                    bbHp.Size        = UDim2.new(2.2, 0, 0.15, 0)
+                    bbHp.StudsOffset = Vector3.new(0, 2.5, 0)
+                    bbHp.Parent      = pHRP
+
+                    -- Fond sombre
+                    local hpBg = Instance.new("Frame")
+                    hpBg.Size               = UDim2.new(1, 0, 1, 0)
+                    hpBg.BackgroundColor3   = Color3.fromRGB(30, 30, 30)
+                    hpBg.BorderSizePixel    = 0
+                    hpBg.Parent             = bbHp
+                    createRounded(hpBg, 4)
+
+                    -- Remplissage coloré
+                    local hpFill = Instance.new("Frame")
+                    hpFill.Size             = UDim2.new(1, 0, 1, 0)
+                    hpFill.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
+                    hpFill.BorderSizePixel  = 0
+                    hpFill.Parent           = hpBg
+                    createRounded(hpFill, 4)
+
+                    local stick = makeStickFigure()
+                    tracerData[p] = { line = line, billboard = bb, label = lbl,
+                        bbHpText = bbHpText, bbHp = bbHp,
+                        hpLabel = hpLabel, hpBg = hpBg, hpFill = hpFill, stick = stick }
                 end
 
                 local d = tracerData[p]
@@ -9056,10 +9571,50 @@ local function createOpenButton(mainGui)
                 end
                 d.label.TextColor3 = roleCol
                 d.line.Color       = roleCol
-                d.label.Text = p.DisplayName
-                    .. "\n@" .. p.Name
-                    .. "\n" .. math.floor(dist) .. " st"
-                    .. "\n" .. roleStr
+
+                -- Texte : displayName + options conditionnelles + HP en bas
+                local txt = p.DisplayName
+                if state.tracerShowName then txt = txt .. "\n@" .. p.Name end
+                txt = txt .. "\n" .. roleStr
+                if state.tracerShowDist then txt = txt .. "\n" .. math.floor(dist) .. " st" end
+                if state.tracerShowTool then
+                    local tool = pChar and pChar:FindFirstChildOfClass("Tool")
+                    if tool then txt = txt .. "\n🔧 " .. tool.Name end
+                end
+
+                -- HP dans le texte principal
+                local hum = pChar and pChar:FindFirstChild("Humanoid")
+                if hum and state.tracerShowHealth then
+                    local hp    = math.floor(hum.Health)
+                    local maxHp = math.max(math.floor(hum.MaxHealth), 1)
+                    txt = txt .. "\n" .. hp .. "/" .. maxHp .. " hp"
+                end
+                d.label.Text = txt
+
+                -- Barre de vie (studs, suit la taille du perso)
+                if d.hpBg and hum and state.tracerShowHealth then
+                    local pct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+                    local hpCol
+                    if pct < 0.25 then
+                        hpCol = Color3.fromRGB(220, 40, 40)
+                    elseif pct < 0.5 then
+                        hpCol = Color3.fromRGB(255, 140, 0)
+                    elseif pct < 0.75 then
+                        hpCol = Color3.fromRGB(220, 220, 0)
+                    else
+                        hpCol = Color3.fromRGB(60, 200, 60)
+                    end
+                    d.hpFill.Size             = UDim2.new(pct, 0, 1, 0)
+                    d.hpFill.BackgroundColor3 = hpCol
+                    d.bbHp.Enabled            = true
+                else
+                    if d.bbHp then d.bbHp.Enabled = false end
+                end
+
+                -- Stick ESP : Highlight active/desactive selon toggle et distance
+                if d.stick then
+                    d.stick.hl.Enabled = state.tracerStickEnabled
+                end
             end
 
             -- Nettoyer les joueurs qui ont quitte le jeu
@@ -9070,7 +9625,139 @@ local function createOpenButton(mainGui)
 
         -- Nettoyage final
         for p in pairs(tracerData) do removeTracer(p) end
+        if stickFolder and stickFolder.Parent then stickFolder:Destroy() end
     end)
+
+    -- Stick ESP : positions 3D mises a jour chaque frame via Heartbeat
+    local STICK_MAX_DIST = 100  -- studs max pour voir le stick
+    local function hideStick(stickData)
+        stickData.hl.Enabled = false
+        for _, bone in ipairs(stickData.bones) do
+            bone.Transparency = 1
+        end
+    end
+
+    game:GetService("RunService").Heartbeat:Connect(function()
+        local myHrpS = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        for p, d in pairs(tracerData) do
+            if not d.stick then continue end
+            local pChar = p.Character
+            local pHrpS = pChar and pChar:FindFirstChild("HumanoidRootPart")
+            if not state.tracerStickEnabled or not pChar or not pHrpS or not myHrpS then
+                hideStick(d.stick)
+                continue
+            end
+            local distS = (pHrpS.Position - myHrpS.Position).Magnitude
+            if distS > STICK_MAX_DIST then
+                hideStick(d.stick)
+                continue
+            end
+            d.stick.hl.Enabled = true
+            updateStick(d.stick, pChar)
+        end
+    end)
+
+    -- Vehicle fly (logique externe adaptee)
+    do
+        local savedSeat   = nil
+        local flyActive   = false
+        local noClipCache = {}
+
+        local function sitOnSeat(seat)
+            if not seat then return end
+            if not (seat:IsA("VehicleSeat") or seat:IsA("Seat")) then return end
+            local char = player.Character
+            if not char then return end
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then pcall(function() seat:Sit(hum) end) end
+        end
+
+        local flyConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            if not state.vehicleFlyEnabled then return end
+
+            local char = player.Character
+            if not char then return end
+            local hum = char:FindFirstChild("Humanoid")
+            if not hum then return end
+
+            local seat = hum.SeatPart
+            if not seat then
+                if savedSeat and savedSeat.Parent then sitOnSeat(savedSeat) end
+                return
+            end
+
+            -- Toujours mettre a jour savedSeat pendant qu'on est assis
+            savedSeat = seat
+
+            local car  = seat.Parent
+            local root = (car:IsA("Model") and car.PrimaryPart) or seat
+
+            local speed = 0
+            if UserInputService:IsKeyDown(state.simFwdKey) then
+                speed = state.vehicleFlySpeed or 150
+            elseif UserInputService:IsKeyDown(state.simRevKey) then
+                speed = -(state.vehicleFlySpeed or 150)
+            end
+
+            local camCF  = workspace.CurrentCamera.CFrame
+            local newPos = root.CFrame.Position + camCF.LookVector * speed * dt
+            local targetCF = CFrame.new(newPos, newPos + camCF.LookVector)
+
+            if car:IsA("Model") then
+                car:PivotTo(targetCF)
+            else
+                root.CFrame = targetCF
+            end
+            root.AssemblyLinearVelocity  = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        end)
+
+        -- Active le fly : sauvegarde le siege actuel
+        -- Desactive : restore collision, clear savedSeat
+        task.spawn(function()
+            local prevEnabled = false
+            while openGui.Parent do
+                task.wait(0.1)
+                local vehFolder = workspace:FindFirstChild("Vehicles")
+                local veh       = vehFolder and vehFolder:FindFirstChild(player.Name)
+
+                if state.vehicleFlyEnabled and not prevEnabled then
+                    -- Activation : sauvegarder le siege
+                    local char = player.Character
+                    local hum  = char and char:FindFirstChild("Humanoid")
+                    savedSeat  = hum and hum.SeatPart or nil
+                    flyActive  = true
+                    -- NoClip seulement si l'option est cochee
+                    if veh and state.vehicleFlyNoClip then
+                        noClipCache = {}
+                        setVehicleNoClip(veh, true, noClipCache)
+                    end
+
+                elseif not state.vehicleFlyEnabled and prevEnabled then
+                    -- Desactivation : restaurer collision si elle avait ete desactivee
+                    if veh and next(noClipCache) then
+                        setVehicleNoClip(veh, false, noClipCache)
+                    end
+                    noClipCache = {}
+                    flyActive   = false
+                    savedSeat   = nil
+
+                elseif state.vehicleFlyEnabled and veh then
+                    -- Maintenir noclip seulement si option cochee
+                    if state.vehicleFlyNoClip then
+                        setVehicleNoClip(veh, true, noClipCache)
+                    elseif next(noClipCache) then
+                        -- Option venait d'etre decochee en cours de fly → restaurer
+                        setVehicleNoClip(veh, false, noClipCache)
+                        noClipCache = {}
+                    end
+                end
+
+                prevEnabled = state.vehicleFlyEnabled
+            end
+            flyConn:Disconnect()
+        end)
+    end
 end
 
 local existing = player:WaitForChild("PlayerGui"):FindFirstChild("VehicleTPUI")
